@@ -1,0 +1,7 @@
+default_rate: 2
+default_concurrency: 2
+timeout: 10
+report_dir: ./reports
+results_dir: ./results
+logging:
+  level: info

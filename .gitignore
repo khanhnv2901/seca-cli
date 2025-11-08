@@ -28,5 +28,36 @@ go.work.sum
 .env
 
 # Editor/IDE
-# .idea/
-# .vscode/
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# SECA-CLI specific
+engagements.json
+results/
+test_results*/
+test_engagements*.json
+
+# Evidence packages
+evidence-*.tar.gz
+evidence-*.tar.gz.asc
+evidence-*.tar.gz.sha256
+
+# Config
+.seca-cli.yaml
+!.seca-cli.yaml.example
+
+# Binary
+seca
+bin/
+dist/
+release/
+
+# Backup files
+*.backup
