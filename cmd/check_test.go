@@ -76,7 +76,6 @@ func TestRunMetadata(t *testing.T) {
 		StartAt:        time.Now(),
 		CompleteAt:     time.Now().Add(5 * time.Minute),
 		AuditHash:      "abc123",
-		ResultsHash:    "def456",
 		TotalTargets:   5,
 	}
 
@@ -88,8 +87,8 @@ func TestRunMetadata(t *testing.T) {
 		t.Errorf("Expected 5 targets, got %d", metadata.TotalTargets)
 	}
 
-	if metadata.AuditHash == "" || metadata.ResultsHash == "" {
-		t.Error("Hashes should not be empty")
+	if metadata.AuditHash == "" {
+		t.Error("AuditHash should not be empty")
 	}
 }
 

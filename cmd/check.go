@@ -36,8 +36,8 @@ type RunMetadata struct {
 	StartAt        time.Time `json:"started_at"`
 	CompleteAt     time.Time `json:"completed_at"`
 	AuditHash      string    `json:"audit_sha256"`
-	ResultsHash    string    `json:"results_sha256"`
 	TotalTargets   int       `json:"total_targets"`
+	// Note: results.json hash is stored in results.json.sha256 file, not here
 }
 
 type RunOutput struct {
@@ -256,18 +256,21 @@ var checkHTTPCmd = &cobra.Command{
 		b, _ := json.MarshalIndent(out, "", "  ")
 		_ = os.WriteFile(resultsPath, b, 0o644)
 
-		// Compute hashes
+		// Compute hash for audit.csv
 		auditPath := filepath.Join(dir, "audit.csv")
 		auditHash, _ := HashFileSHA256(auditPath)
-		resultsHash, _ := HashFileSHA256(resultsPath)
 
-		// Update metadata hashes
+		// Update metadata with audit hash only
 		out.Metadata.AuditHash = auditHash
-		out.Metadata.ResultsHash = resultsHash
 
-		// Write updated results JSON
+		// Write final results JSON
 		b, _ = json.MarshalIndent(out, "", "  ")
 		_ = os.WriteFile(resultsPath, b, 0o644)
+
+		// Hash results.json AFTER final write
+		resultsHash, _ := HashFileSHA256(resultsPath)
+
+		// Note: ResultsHash is not stored in the file itself to avoid hash mismatch
 
 		fmt.Printf("Run complete.\n")
 		fmt.Printf("Results: %s\nAudit: %s\n", resultsPath, auditPath)
