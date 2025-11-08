@@ -65,7 +65,9 @@ func TestLoadEngagements_ValidFile(t *testing.T) {
 
 	// Write test data
 	data, _ := json.MarshalIndent(testEngagements, "", "  ")
-	os.WriteFile(engagementsFile, data, 0644)
+	if err := os.WriteFile(engagementsFile, data, 0644); err != nil {
+		t.Fatalf("Failed to write test file: %v", err)
+	}
 
 	// Load and verify
 	result := loadEngagements()
