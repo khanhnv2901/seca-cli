@@ -19,7 +19,9 @@ func TestAppendAuditRow(t *testing.T) {
 	defer func() { resultsDir = origResultsDir }()
 
 	// Create directory
-	os.MkdirAll(filepath.Join(tmpDir, engagementID), 0755)
+	if err := os.MkdirAll(filepath.Join(tmpDir, engagementID), 0755); err != nil {
+		t.Fatalf("Failed to create directory: %v", err)
+	}
 
 	// Test data
 	err := AppendAuditRow(
@@ -106,7 +108,9 @@ func TestAppendAuditRow_MultipleRows(t *testing.T) {
 	resultsDir = tmpDir
 	defer func() { resultsDir = origResultsDir }()
 
-	os.MkdirAll(filepath.Join(tmpDir, engagementID), 0755)
+	if err := os.MkdirAll(filepath.Join(tmpDir, engagementID), 0755); err != nil {
+		t.Fatalf("Failed to create directory: %v", err)
+	}
 
 	// Append multiple rows
 	for i := 0; i < 3; i++ {
@@ -149,7 +153,9 @@ func TestAppendAuditRow_WithError(t *testing.T) {
 	resultsDir = tmpDir
 	defer func() { resultsDir = origResultsDir }()
 
-	os.MkdirAll(filepath.Join(tmpDir, engagementID), 0755)
+	if err := os.MkdirAll(filepath.Join(tmpDir, engagementID), 0755); err != nil {
+		t.Fatalf("Failed to create directory: %v", err)
+	}
 
 	// Test with error
 	err := AppendAuditRow(
@@ -257,12 +263,16 @@ func TestSaveRawCapture(t *testing.T) {
 func TestHashFileSHA256(t *testing.T) {
 	tmpDir := "test_hash"
 	defer os.RemoveAll(tmpDir)
-	os.MkdirAll(tmpDir, 0755)
+	if err := os.MkdirAll(tmpDir, 0755); err != nil {
+		t.Fatalf("Failed to create directory: %v", err)
+	}
 
 	// Create a test file
 	testFile := filepath.Join(tmpDir, "test.txt")
 	testContent := []byte("This is a test file for SHA256 hashing")
-	os.WriteFile(testFile, testContent, 0644)
+	if err := os.WriteFile(testFile, testContent, 0644); err != nil {
+		t.Fatalf("Failed to write test file: %v", err)
+	}
 
 	// Generate hash
 	hash, err := HashFileSHA256(testFile)
@@ -312,11 +322,15 @@ func TestHashFileSHA256_NonExistentFile(t *testing.T) {
 func TestHashFileSHA256_Consistency(t *testing.T) {
 	tmpDir := "test_hash_consistency"
 	defer os.RemoveAll(tmpDir)
-	os.MkdirAll(tmpDir, 0755)
+	if err := os.MkdirAll(tmpDir, 0755); err != nil {
+		t.Fatalf("Failed to create directory: %v", err)
+	}
 
 	testFile := filepath.Join(tmpDir, "consistency.txt")
 	testContent := []byte("Consistent content")
-	os.WriteFile(testFile, testContent, 0644)
+	if err := os.WriteFile(testFile, testContent, 0644); err != nil {
+		t.Fatalf("Failed to write test file: %v", err)
+	}
 
 	// Generate hash twice
 	hash1, _ := HashFileSHA256(testFile)

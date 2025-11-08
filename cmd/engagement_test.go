@@ -15,7 +15,7 @@ func setupTestEngagements(t *testing.T) func() {
 	backupFile := "engagements.json.backup"
 	if _, err := os.Stat(engagementsFile); err == nil {
 		data, _ := os.ReadFile(engagementsFile)
-		os.WriteFile(backupFile, data, 0644)
+		_ = os.WriteFile(backupFile, data, 0644)
 	}
 
 	// Remove existing file
@@ -26,11 +26,11 @@ func setupTestEngagements(t *testing.T) func() {
 		// Restore backup if it existed
 		if _, err := os.Stat(backupFile); err == nil {
 			data, _ := os.ReadFile(backupFile)
-			os.WriteFile(engagementsFile, data, 0644)
-			os.Remove(backupFile)
+			_ = os.WriteFile(engagementsFile, data, 0644)
+			_ = os.Remove(backupFile)
 		} else {
 			// Just remove test file
-			os.Remove(engagementsFile)
+			_ = os.Remove(engagementsFile)
 		}
 	}
 }
@@ -121,7 +121,9 @@ func TestSaveEngagements(t *testing.T) {
 	// Load back and verify
 	data, _ := os.ReadFile(engagementsFile)
 	var loaded []Engagement
-	json.Unmarshal(data, &loaded)
+	if err := json.Unmarshal(data, &loaded); err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
 
 	if len(loaded) != 1 {
 		t.Fatalf("Expected 1 engagement, got %d", len(loaded))

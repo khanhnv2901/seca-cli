@@ -147,7 +147,7 @@ func TestHTTPCheck_MockServer(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Server", "test-server")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	}))
 	defer server.Close()
 
@@ -185,10 +185,10 @@ func TestHTTPCheck_RobotsText(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/robots.txt" {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("User-agent: *\nDisallow: /admin"))
+			_, _ = w.Write([]byte("User-agent: *\nDisallow: /admin"))
 		} else {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("OK"))
+			_, _ = w.Write([]byte("OK"))
 		}
 	}))
 	defer server.Close()
@@ -281,7 +281,9 @@ func TestCheckResult_Marshaling_OmitEmpty(t *testing.T) {
 	}
 
 	var decoded map[string]interface{}
-	json.Unmarshal(data, &decoded)
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
 
 	// HTTPStatus should be omitted when 0
 	if _, exists := decoded["http_status"]; exists {

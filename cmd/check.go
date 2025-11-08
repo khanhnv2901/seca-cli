@@ -202,7 +202,7 @@ var checkHTTPCmd = &cobra.Command{
 					bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 					_ = SaveRawCapture(id, t, resp.Header, string(bodyBytes))
 				} else {
-					io.Copy(io.Discard, resp.Body)
+					_, _ = io.Copy(io.Discard, resp.Body)
 				}
 				if resp.Body != nil {
 					_ = resp.Body.Close()
