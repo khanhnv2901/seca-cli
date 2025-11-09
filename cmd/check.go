@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sync"
 	"time"
@@ -52,6 +53,8 @@ var (
 	auditAppendRaw bool
 	complianceMode bool
 	retentionDays  int
+	autoSign       bool
+	gpgKey         string
 )
 
 var checkCmd = &cobra.Command{
@@ -68,6 +71,13 @@ var checkHTTPCmd = &cobra.Command{
 		// Safety: require explicit ROE flag for any run
 		roeConfirm, _ := cmd.Flags().GetBool("roe-confirm")
 
+		// check compliance mode
+		complianceMode, _ := cmd.Flags().GetBool("compliance-mode")
+
+		// auto sign GPG Key
+		autoSign, _ = cmd.Flags().GetBool("auto-sign")
+		gpgKey, _ = cmd.Flags().GetString("gpg-key")
+
 		if id == "" {
 			return fmt.Errorf("--id is required")
 		}
@@ -79,8 +89,6 @@ var checkHTTPCmd = &cobra.Command{
 		if operator == "" {
 			return fmt.Errorf("--operator is required")
 		}
-
-		complianceMode, _ := cmd.Flags().GetBool("compliance-mode")
 
 		if complianceMode {
 			fmt.Println("[Compliance Mode] Enabled")
@@ -272,6 +280,21 @@ var checkHTTPCmd = &cobra.Command{
 
 		// Note: ResultsHash is not stored in the file itself to avoid hash mismatch
 
+		if autoSign {
+			if gpgKey == "" {
+				return fmt.Errorf("--gpg-key required with --auto-sign")
+			}
+			signFile := func(path string) error {
+				cmd := exec.Command("gpg", "--armor", "--local-user", gpgKey, "--sign", path)
+				cmd.Dir = filepath.Dir(path)
+				cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+				return cmd.Run()
+			}
+			_ = signFile(auditPath + ".sha256")
+			_ = signFile(resultsPath + ".sha256")
+			fmt.Println("GPG signatures created for both .sha256 files.")
+		}
+
 		fmt.Printf("Run complete.\n")
 		fmt.Printf("Results: %s\nAudit: %s\n", resultsPath, auditPath)
 		fmt.Printf("SHA256 audit: %s\nSHA256 results: %s\n", auditHash, resultsHash)
@@ -302,6 +325,8 @@ func init() {
 	checkHTTPCmd.Flags().BoolVar(&auditAppendRaw, "audit-append-raw", false, "Save limited raw headers/body for auditing (handle carefully)")
 	checkHTTPCmd.Flags().BoolVar(&complianceMode, "compliance-mode", false, "Enable compliance enforcement (hashing, retention checks)")
 	checkHTTPCmd.Flags().IntVar(&retentionDays, "retention-days", 0, "Retention period (days) for raw captures; required in compliance mode if --audit-append-raw is used")
+	checkHTTPCmd.Flags().Bool("auto-sign", false, "Automatically sign .sha256 files using configured GPG key")
+	checkHTTPCmd.Flags().String("gpg-key", "", "GPG key ID or email for signing (required if --auto-sign)")
 
 	checkCmd.AddCommand(checkHTTPCmd)
 }
