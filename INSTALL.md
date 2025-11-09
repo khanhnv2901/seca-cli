@@ -180,17 +180,63 @@ VERSION=1.0.0 GIT_COMMIT=$(git rev-parse --short HEAD) ./scripts/build.sh
 
 ## Configuration
 
+### Data Storage Locations
+
+**SECA-CLI v0.2.0+ stores data in OS-appropriate directories:**
+
+**Linux/Unix:**
+```
+~/.local/share/seca-cli/
+├── engagements.json
+└── results/
+    └── <engagement-id>/
+```
+
+**macOS:**
+```
+~/Library/Application Support/seca-cli/
+├── engagements.json
+└── results/
+    └── <engagement-id>/
+```
+
+**Windows:**
+```
+%LOCALAPPDATA%\seca-cli\
+├── engagements.json
+└── results\
+    └── <engagement-id>\
+```
+
+### Automatic Migration
+
+When upgrading from versions prior to 0.2.0:
+- SECA-CLI automatically migrates `engagements.json` from the project directory on first run
+- The old file is backed up as `engagements.json.backup`
+- See [DATA_DIRECTORY_MIGRATION.md](DATA_DIRECTORY_MIGRATION.md) for details
+
 ### Global Configuration File
 
 Create `~/.seca-cli.yaml`:
 
 ```yaml
-# Results directory (default: ./results)
-results_dir: /path/to/results
+# Optional: Override default data directory
+results_dir: /custom/path/to/results
+
+# Example: Use shared team directory
+# results_dir: /mnt/shared/seca-data
+
+# Example: Use network storage
+# results_dir: /mnt/nfs/security-team/seca
 
 # Default operator name (optional)
 operator: your-name
 ```
+
+**Default Behavior (when `results_dir` is not set):**
+- Linux/Unix: `~/.local/share/seca-cli/`
+- macOS: `~/Library/Application Support/seca-cli/`
+- Windows: `%LOCALAPPDATA%\seca-cli\`
 
 ### Environment Variables
 
@@ -210,6 +256,8 @@ Create `.seca-cli.yaml` in your project directory:
 results_dir: ./project-results
 operator: project-team
 ```
+
+> **Note:** Project-specific configurations override user-level data directories.
 
 ---
 
@@ -325,24 +373,79 @@ rm .seca-cli.yaml
 
 ### Remove Data
 
-```bash
-# Remove results (CAUTION: This deletes all evidence!)
-rm -rf results/
+**CAUTION: This deletes all engagements and evidence!**
 
-# Remove engagement data
-rm engagements.json
+```bash
+# Linux/Unix
+rm -rf ~/.local/share/seca-cli/
+
+# macOS
+rm -rf ~/Library/Application\ Support/seca-cli/
+
+# Windows (PowerShell)
+Remove-Item -Recurse -Force "$env:LOCALAPPDATA\seca-cli"
+```
+
+**If using custom data directory**, check your config:
+```bash
+# Check config for custom results_dir
+cat ~/.seca-cli.yaml | grep results_dir
 ```
 
 ### Complete Uninstall
 
+**Linux/Unix:**
 ```bash
-# Uninstall script
+# Remove binary
 sudo rm /usr/local/bin/seca
+
+# Remove configuration
 rm ~/.seca-cli.yaml
+
+# Remove data (CAUTION!)
+rm -rf ~/.local/share/seca-cli/
+
+# Remove old project-directory data if exists
 rm -rf results/
-rm engagements.json
+rm -f engagements.json engagements.json.backup
 
 echo "SECA-CLI uninstalled"
+```
+
+**macOS:**
+```bash
+# Remove binary
+sudo rm /usr/local/bin/seca
+
+# Remove configuration
+rm ~/.seca-cli.yaml
+
+# Remove data (CAUTION!)
+rm -rf ~/Library/Application\ Support/seca-cli/
+
+# Remove old project-directory data if exists
+rm -rf results/
+rm -f engagements.json engagements.json.backup
+
+echo "SECA-CLI uninstalled"
+```
+
+**Windows (PowerShell):**
+```powershell
+# Remove binary
+Remove-Item "C:\Program Files\seca-cli\seca.exe"
+
+# Remove configuration
+Remove-Item "$env:USERPROFILE\.seca-cli.yaml"
+
+# Remove data (CAUTION!)
+Remove-Item -Recurse -Force "$env:LOCALAPPDATA\seca-cli"
+
+# Remove old project-directory data if exists
+Remove-Item -Recurse -Force "results\"
+Remove-Item "engagements.json", "engagements.json.backup" -ErrorAction SilentlyContinue
+
+Write-Host "SECA-CLI uninstalled"
 ```
 
 ---

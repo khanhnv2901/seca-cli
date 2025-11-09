@@ -11,26 +11,32 @@ import (
 func setupTestEngagements(t *testing.T) func() {
 	t.Helper()
 
-	// Backup existing engagements.json if it exists
-	backupFile := "engagements.json.backup"
-	if _, err := os.Stat(engagementsFile); err == nil {
-		data, _ := os.ReadFile(engagementsFile)
+	// Get the actual file path
+	filePath, err := getEngagementsFilePath()
+	if err != nil {
+		t.Fatalf("Failed to get engagements file path: %v", err)
+	}
+
+	// Backup existing file if it exists
+	backupFile := filePath + ".test.backup"
+	if _, err := os.Stat(filePath); err == nil {
+		data, _ := os.ReadFile(filePath)
 		_ = os.WriteFile(backupFile, data, 0644)
 	}
 
 	// Remove existing file
-	os.Remove(engagementsFile)
+	os.Remove(filePath)
 
 	// Return cleanup function
 	return func() {
 		// Restore backup if it existed
 		if _, err := os.Stat(backupFile); err == nil {
 			data, _ := os.ReadFile(backupFile)
-			_ = os.WriteFile(engagementsFile, data, 0644)
+			_ = os.WriteFile(filePath, data, 0644)
 			_ = os.Remove(backupFile)
 		} else {
 			// Just remove test file
-			_ = os.Remove(engagementsFile)
+			_ = os.Remove(filePath)
 		}
 	}
 }
@@ -63,9 +69,15 @@ func TestLoadEngagements_ValidFile(t *testing.T) {
 		},
 	}
 
+	// Get the actual file path
+	filePath, err := getEngagementsFilePath()
+	if err != nil {
+		t.Fatalf("Failed to get engagements file path: %v", err)
+	}
+
 	// Write test data
 	data, _ := json.MarshalIndent(testEngagements, "", "  ")
-	if err := os.WriteFile(engagementsFile, data, 0644); err != nil {
+	if err := os.WriteFile(filePath, data, 0644); err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 
@@ -115,13 +127,19 @@ func TestSaveEngagements(t *testing.T) {
 	// Save engagements
 	saveEngagements(testEngagements)
 
+	// Get the actual file path (which might be in data directory)
+	filePath, err := getEngagementsFilePath()
+	if err != nil {
+		t.Fatalf("Failed to get engagements file path: %v", err)
+	}
+
 	// Verify file exists
-	if _, err := os.Stat(engagementsFile); os.IsNotExist(err) {
-		t.Fatal("File was not created")
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		t.Fatalf("File was not created at %s", filePath)
 	}
 
 	// Load back and verify
-	data, _ := os.ReadFile(engagementsFile)
+	data, _ := os.ReadFile(filePath)
 	var loaded []Engagement
 	if err := json.Unmarshal(data, &loaded); err != nil {
 		t.Fatalf("Failed to unmarshal: %v", err)

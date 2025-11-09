@@ -18,6 +18,64 @@ A professional command-line tool for managing authorized security testing engage
 - **Raw Capture** - Optional HTTP response capture with PII safeguards and retention controls
 - **TLS Monitoring** - Automatic TLS certificate expiry detection and warnings
 
+## Data Storage
+
+SECA-CLI stores user data in OS-appropriate data directories following platform standards, ensuring proper permissions, multi-user support, and clean separation from the codebase.
+
+### Data Locations
+
+**Linux/Unix:**
+```
+~/.local/share/seca-cli/
+├── engagements.json
+└── results/
+    └── <engagement-id>/
+        ├── audit.csv
+        ├── results.json
+        └── raw_*.txt
+```
+
+**macOS:**
+```
+~/Library/Application Support/seca-cli/
+├── engagements.json
+└── results/
+    └── <engagement-id>/
+        ├── audit.csv
+        ├── results.json
+        └── raw_*.txt
+```
+
+**Windows:**
+```
+%LOCALAPPDATA%\seca-cli\
+├── engagements.json
+└── results\
+    └── <engagement-id>\
+        ├── audit.csv
+        ├── results.json
+        └── raw_*.txt
+```
+
+### Automatic Migration
+
+When upgrading from versions prior to 0.2.0, SECA-CLI automatically migrates `engagements.json` from the project directory to the new location on first run. The old file is backed up as `engagements.json.backup`.
+
+### Custom Data Directory
+
+You can override the default data directory in `~/.seca-cli.yaml`:
+
+```yaml
+results_dir: /custom/path/to/results
+```
+
+This is useful for:
+- Shared team directories
+- Network storage
+- Custom backup solutions
+
+See [DATA_DIRECTORY_MIGRATION.md](DATA_DIRECTORY_MIGRATION.md) for detailed migration instructions.
+
 ## Quick Start
 
 ### Installation
@@ -161,7 +219,11 @@ Options:
 
 ## Evidence & Results
 
-All evidence is stored in `results/<engagement-id>/`:
+All evidence is stored in the OS-specific data directory under `results/<engagement-id>/`:
+
+**Linux/Unix:** `~/.local/share/seca-cli/results/<engagement-id>/`
+**macOS:** `~/Library/Application Support/seca-cli/results/<engagement-id>/`
+**Windows:** `%LOCALAPPDATA%\seca-cli\results\<engagement-id>\`
 
 ```
 results/1762627948156627663/
@@ -171,6 +233,8 @@ results/1762627948156627663/
 ├── results.json.sha256    # SHA256 hash
 └── raw_*.txt              # Raw captures (if --audit-append-raw used)
 ```
+
+See the [Data Storage](#data-storage) section for custom directory configuration.
 
 ### Audit Log Format
 
@@ -269,17 +333,29 @@ This creates:
 
 ## Configuration
 
-Create `~/.seca-cli.yaml`:
+SECA-CLI uses OS-appropriate data directories by default. You can customize the configuration by creating `~/.seca-cli.yaml`:
 
 ```yaml
-results_dir: /path/to/results
+# Optional: Override default data directory
+results_dir: /custom/path/to/results
+
+# Example: Use shared team directory
+# results_dir: /mnt/shared/seca-data
+
+# Example: Use network storage
+# results_dir: /mnt/nfs/security-team/seca
 ```
 
-Or use the `--config` flag:
+Or use the `--config` flag to specify a custom config file:
 
 ```bash
 seca --config /path/to/config.yaml engagement list
 ```
+
+**Default Data Directories** (when `results_dir` is not set):
+- **Linux/Unix:** `~/.local/share/seca-cli/`
+- **macOS:** `~/Library/Application Support/seca-cli/`
+- **Windows:** `%LOCALAPPDATA%\seca-cli\`
 
 ## Testing
 
@@ -445,21 +521,34 @@ make package ENGAGEMENT_ID=1762627948156627663
 
 ```
 seca-cli/
-├── cmd/                    # Command implementations
-│   ├── audit.go           # Audit trail functions
-│   ├── check.go           # HTTP check commands
-│   ├── engagement.go      # Engagement management
-│   ├── report.go          # Reporting (placeholder)
-│   └── root.go            # Root command & config
-├── main.go                # Application entry point
-├── Makefile               # Automation tasks
-├── README.md              # This file
-├── COMPLIANCE.md          # Compliance documentation
+├── cmd/                          # Command implementations
+│   ├── audit.go                 # Audit trail functions
+│   ├── check.go                 # HTTP check commands
+│   ├── engagement.go            # Engagement management
+│   ├── paths.go                 # Data directory management
+│   ├── report.go                # Report generation (JSON/MD/HTML)
+│   ├── root.go                  # Root command & config
+│   ├── templates/
+│   │   └── report.html          # HTML report template
+│   └── *_test.go                # Comprehensive test suite
+├── main.go                      # Application entry point
+├── Makefile                     # Automation tasks
+├── README.md                    # This file
+├── COMPLIANCE.md                # Compliance documentation
+├── DATA_DIRECTORY_MIGRATION.md  # Migration guide
+├── TESTING.md                   # Testing documentation
 ├── .gitignore
 ├── go.mod
-├── go.sum
-├── engagements.json       # Engagement database
-└── results/               # Evidence storage
+└── go.sum
+```
+
+**User Data** (OS-specific locations):
+```
+~/.local/share/seca-cli/    (Linux/Unix)
+~/Library/Application Support/seca-cli/    (macOS)
+%LOCALAPPDATA%\seca-cli\    (Windows)
+├── engagements.json        # Engagement database
+└── results/                # Evidence storage
     └── <engagement-id>/
         ├── audit.csv
         ├── audit.csv.sha256
@@ -467,6 +556,8 @@ seca-cli/
         ├── results.json.sha256
         └── raw_*.txt
 ```
+
+> **Note:** User data is now stored in OS-appropriate data directories instead of the project directory. See [Data Storage](#data-storage) for details.
 
 ## Dependencies
 

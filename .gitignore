@@ -39,7 +39,13 @@ go.work.sum
 Thumbs.db
 
 # SECA-CLI specific
+# Note: Actual data is stored in OS-specific data directory:
+#   Linux/Unix: ~/.local/share/seca-cli/
+#   macOS: ~/Library/Application Support/seca-cli/
+#   Windows: %LOCALAPPDATA%\seca-cli\
+# Legacy files in project directory (for backward compatibility):
 engagements.json
+engagements.json.backup
 results/
 test_results*/
 test_engagements*.json

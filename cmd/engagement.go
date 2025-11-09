@@ -22,6 +22,8 @@ type Engagement struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// Deprecated: engagementsFile is kept for backward compatibility in tests
+// Use getEngagementsFilePath() instead
 const engagementsFile = "engagements.json"
 
 var engagementCmd = &cobra.Command{
@@ -113,16 +115,45 @@ func init() {
 }
 
 func loadEngagements() []Engagement {
-	if _, err := os.Stat(engagementsFile); os.IsNotExist(err) {
+	filePath, err := getEngagementsFilePath()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error getting engagements file path: %v\n", err)
 		return []Engagement{}
 	}
-	b, _ := os.ReadFile(engagementsFile)
+
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return []Engagement{}
+	}
+
+	b, err := os.ReadFile(filePath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading engagements file: %v\n", err)
+		return []Engagement{}
+	}
+
 	var out []Engagement
-	_ = json.Unmarshal(b, &out)
+	if err := json.Unmarshal(b, &out); err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing engagements file: %v\n", err)
+		return []Engagement{}
+	}
+
 	return out
 }
 
 func saveEngagements(list []Engagement) {
-	b, _ := json.MarshalIndent(list, "", "  ")
-	_ = os.WriteFile(engagementsFile, b, 0644)
+	filePath, err := getEngagementsFilePath()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error getting engagements file path: %v\n", err)
+		return
+	}
+
+	b, err := json.MarshalIndent(list, "", "  ")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error marshaling engagements: %v\n", err)
+		return
+	}
+
+	if err := os.WriteFile(filePath, b, 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing engagements file: %v\n", err)
+	}
 }

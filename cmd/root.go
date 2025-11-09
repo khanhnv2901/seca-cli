@@ -18,6 +18,24 @@ var resultsDir string
 var rootCmd = &cobra.Command{
 	Use:   "seca",
 	Short: "Authorized engagement management & safe checks (for lawful testing only)",
+	Long: `SECA-CLI - Secure Engagement & Compliance Auditing CLI
+
+A professional command-line tool for managing authorized security testing engagements
+with built-in compliance, evidence integrity, and audit trail capabilities.
+
+Data Storage:
+  Linux/Unix:  ~/.local/share/seca-cli/
+  macOS:       ~/Library/Application Support/seca-cli/
+  Windows:     %LOCALAPPDATA%\seca-cli\
+
+You can override the data directory in ~/.seca-cli.yaml with:
+  results_dir: /custom/path/to/results
+
+Documentation:
+  README.md                    - Full documentation
+  DATA_DIRECTORY_MIGRATION.md  - Data migration guide
+  COMPLIANCE.md                - Compliance guidelines
+`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// init config
 		if cfgFile != "" {
@@ -31,7 +49,16 @@ var rootCmd = &cobra.Command{
 		_ = viper.ReadInConfig()
 		resultsDir = viper.GetString("results_dir")
 		if resultsDir == "" {
-			resultsDir = "./results"
+			// Use proper data directory by default
+			dataDir, err := getResultsDir()
+			if err != nil {
+				// Fallback to old behavior if data directory fails
+				fmt.Fprintf(os.Stderr, "Warning: Could not get data directory: %v\n", err)
+				fmt.Fprintf(os.Stderr, "Falling back to ./results\n")
+				resultsDir = "./results"
+			} else {
+				resultsDir = dataDir
+			}
 		}
 
 		// create results dir if not exists
