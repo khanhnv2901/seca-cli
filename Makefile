@@ -184,6 +184,46 @@ show-stats: ## Show statistics for a specific engagement
 		exit 1; \
 	fi
 
+report-generate: ## Generate report in specified format (json|md|html)
+	@if [ -z "$(ENGAGEMENT_ID)" ]; then \
+		echo "$(RED)Error: ENGAGEMENT_ID is required$(NC)"; \
+		echo "Usage: make report-generate ENGAGEMENT_ID=<id> FORMAT=<json|md|html>"; \
+		exit 1; \
+	fi
+	@FORMAT=$${FORMAT:-md}; \
+	echo "$(YELLOW)Generating $$FORMAT report for engagement $(ENGAGEMENT_ID)...$(NC)"; \
+	./seca report generate --id=$(ENGAGEMENT_ID) --format=$$FORMAT && \
+	echo "$(GREEN)✓ Report generated successfully$(NC)"
+
+report-json: ## Generate JSON report
+	@$(MAKE) report-generate FORMAT=json ENGAGEMENT_ID=$(ENGAGEMENT_ID)
+
+report-md: ## Generate Markdown report
+	@$(MAKE) report-generate FORMAT=md ENGAGEMENT_ID=$(ENGAGEMENT_ID)
+
+report-html: ## Generate HTML report
+	@$(MAKE) report-generate FORMAT=html ENGAGEMENT_ID=$(ENGAGEMENT_ID)
+
+report-all: ## Generate reports in all formats (json, md, html)
+	@if [ -z "$(ENGAGEMENT_ID)" ]; then \
+		echo "$(RED)Error: ENGAGEMENT_ID is required$(NC)"; \
+		echo "Usage: make report-all ENGAGEMENT_ID=<id>"; \
+		exit 1; \
+	fi
+	@echo "$(YELLOW)Generating all report formats for engagement $(ENGAGEMENT_ID)...$(NC)"
+	@$(MAKE) report-json ENGAGEMENT_ID=$(ENGAGEMENT_ID)
+	@$(MAKE) report-md ENGAGEMENT_ID=$(ENGAGEMENT_ID)
+	@$(MAKE) report-html ENGAGEMENT_ID=$(ENGAGEMENT_ID)
+	@echo "$(GREEN)✓ All reports generated successfully$(NC)"
+
+report-stats: build ## Show quick statistics for an engagement
+	@if [ -z "$(ENGAGEMENT_ID)" ]; then \
+		echo "$(RED)Error: ENGAGEMENT_ID is required$(NC)"; \
+		echo "Usage: make report-stats ENGAGEMENT_ID=<id>"; \
+		exit 1; \
+	fi
+	@./seca report stats --id=$(ENGAGEMENT_ID)
+
 clean: ## Remove evidence packages (does NOT remove results directory)
 	@echo "$(YELLOW)Removing evidence packages...$(NC)"
 	@rm -f evidence-*.tar.gz evidence-*.tar.gz.asc evidence-*.tar.gz.sha256

@@ -1,49 +1,275 @@
 package cmd
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 )
 
+//go:embed templates/report.html
+var htmlTemplate string
+
 var reportCmd = &cobra.Command{
 	Use:   "report",
-	Short: "Generate report for an engagement (from results)",
+	Short: "Generate a summary report (markdown or HTML)",
 }
 
 var reportGenerateCmd = &cobra.Command{
 	Use:   "generate",
-	Short: "Generate JSON report for an engagement id",
+	Short: "Generate report for an engagement",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		id, _ := cmd.Flags().GetString("id")
+		format, _ := cmd.Flags().GetString("format")
+
 		if id == "" {
 			return fmt.Errorf("--id is required")
 		}
 
-		// read results from a results directory (this is app specific)
-		path := fmt.Sprintf("results_%s.json", id)
+		// Validate format
+		format = strings.ToLower(format)
+		if format != "json" && format != "md" && format != "html" {
+			return fmt.Errorf("invalid format: %s (must be json, md, or html)", format)
+		}
+
+		// Read results from results directory
+		path := filepath.Join(resultsDir, id, "results.json")
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			return fmt.Errorf("no results found at %s", path)
 		}
-		b, _ := os.ReadFile(path)
-		fmt.Printf("Report for engagement %s:\n", id)
-		// pretty print
-		var pretty map[string]interface{}
-		_ = json.Unmarshal(b, &pretty)
-		out, _ := json.MarshalIndent(pretty, "", "  ")
-		fmt.Println(string(out))
-		// optionally create markdown summary
-		md := fmt.Sprintf("# Engagement %s Report\nGenerated: %s\n\n(see JSON for details)\n", id, time.Now().Format(time.RFC3339))
-		_ = os.WriteFile(fmt.Sprintf("report_%s.md", id), []byte(md), 0644)
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		// Parse results
+		var output RunOutput
+		if err := json.Unmarshal(data, &output); err != nil {
+			return fmt.Errorf("failed to parse results: %w", err)
+		}
+
+		// Generate report based on format
+		var reportContent string
+		var filename string
+
+		switch format {
+		case "json":
+			reportContent, err = generateJSONReport(&output)
+			filename = fmt.Sprintf("report_%s.json", id)
+		case "md":
+			reportContent, err = generateMarkdownReport(&output)
+			filename = fmt.Sprintf("report_%s.md", id)
+		case "html":
+			reportContent, err = generateHTMLReport(&output)
+			filename = fmt.Sprintf("report_%s.html", id)
+		}
+
+		if err != nil {
+			return fmt.Errorf("failed to generate report: %w", err)
+		}
+
+		// Write report to file
+		reportPath := filepath.Join(resultsDir, id, filename)
+		if err := os.WriteFile(reportPath, []byte(reportContent), 0644); err != nil {
+			return fmt.Errorf("failed to write report: %w", err)
+		}
+
+		fmt.Printf("Report generated: %s\n", reportPath)
+		fmt.Printf("Format: %s\n", format)
+		fmt.Printf("Total targets: %d\n", output.Metadata.TotalTargets)
 
 		return nil
 	},
 }
 
+func generateJSONReport(output *RunOutput) (string, error) {
+	data, err := json.MarshalIndent(output, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+func generateMarkdownReport(output *RunOutput) (string, error) {
+	var sb strings.Builder
+
+	// Header
+	sb.WriteString(fmt.Sprintf("# Engagement Report: %s\n\n", output.Metadata.EngagementName))
+	sb.WriteString(fmt.Sprintf("**Generated:** %s\n\n", time.Now().Format(time.RFC3339)))
+
+	// Metadata Section
+	sb.WriteString("## Metadata\n\n")
+	sb.WriteString(fmt.Sprintf("- **Engagement ID:** %s\n", output.Metadata.EngagementID))
+	sb.WriteString(fmt.Sprintf("- **Engagement Name:** %s\n", output.Metadata.EngagementName))
+	sb.WriteString(fmt.Sprintf("- **Owner:** %s\n", output.Metadata.Owner))
+	sb.WriteString(fmt.Sprintf("- **Operator:** %s\n", output.Metadata.Operator))
+	sb.WriteString(fmt.Sprintf("- **Started At:** %s\n", output.Metadata.StartAt.Format(time.RFC3339)))
+	sb.WriteString(fmt.Sprintf("- **Completed At:** %s\n", output.Metadata.CompleteAt.Format(time.RFC3339)))
+	sb.WriteString(fmt.Sprintf("- **Duration:** %s\n", output.Metadata.CompleteAt.Sub(output.Metadata.StartAt).Round(time.Second)))
+	sb.WriteString(fmt.Sprintf("- **Total Targets:** %d\n", output.Metadata.TotalTargets))
+	if output.Metadata.AuditHash != "" {
+		sb.WriteString(fmt.Sprintf("- **Audit Hash (SHA256):** `%s`\n", output.Metadata.AuditHash))
+	}
+	sb.WriteString("\n")
+
+	// Summary Statistics
+	okCount := 0
+	errorCount := 0
+	for _, r := range output.Results {
+		if r.Status == "ok" {
+			okCount++
+		} else {
+			errorCount++
+		}
+	}
+
+	sb.WriteString("## Summary\n\n")
+	sb.WriteString(fmt.Sprintf("- **Successful:** %d\n", okCount))
+	sb.WriteString(fmt.Sprintf("- **Failed:** %d\n", errorCount))
+	sb.WriteString(fmt.Sprintf("- **Success Rate:** %.2f%%\n\n", float64(okCount)/float64(len(output.Results))*100))
+
+	// Results Table
+	sb.WriteString("## Results\n\n")
+	sb.WriteString("| Target | Status | HTTP Status | Server | TLS Expiry | Notes | Error |\n")
+	sb.WriteString("|--------|--------|-------------|--------|------------|-------|-------|\n")
+
+	for _, r := range output.Results {
+		httpStatus := ""
+		if r.HTTPStatus > 0 {
+			httpStatus = fmt.Sprintf("%d", r.HTTPStatus)
+		}
+
+		tlsExpiry := ""
+		if r.TLSExpiry != "" {
+			tlsExpiry = r.TLSExpiry
+		}
+
+		notes := r.Notes
+		if notes == "" {
+			notes = "-"
+		}
+
+		errorMsg := r.Error
+		if errorMsg == "" {
+			errorMsg = "-"
+		}
+
+		sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s | %s | %s |\n",
+			r.Target, r.Status, httpStatus, r.ServerHeader, tlsExpiry, notes, errorMsg))
+	}
+
+	sb.WriteString("\n---\n")
+	sb.WriteString(fmt.Sprintf("\n*Report generated by seca-cli on %s*\n", time.Now().Format("2006-01-02 15:04:05")))
+
+	return sb.String(), nil
+}
+
+// TemplateData holds the data for HTML template rendering
+type TemplateData struct {
+	Metadata     RunMetadata
+	Results      []CheckResult
+	GeneratedAt  string
+	StartedAt    string
+	CompletedAt  string
+	Duration     string
+	SuccessCount int
+	ErrorCount   int
+	SuccessRate  string
+	FooterDate   string
+}
+
+func generateHTMLReport(output *RunOutput) (string, error) {
+	// Calculate summary statistics
+	okCount := 0
+	errorCount := 0
+	for _, r := range output.Results {
+		if r.Status == "ok" {
+			okCount++
+		} else {
+			errorCount++
+		}
+	}
+
+	// Calculate success rate
+	successRate := 0.0
+	if len(output.Results) > 0 {
+		successRate = float64(okCount) / float64(len(output.Results)) * 100
+	}
+
+	// Prepare template data
+	data := TemplateData{
+		Metadata:     output.Metadata,
+		Results:      output.Results,
+		GeneratedAt:  time.Now().Format(time.RFC3339),
+		StartedAt:    output.Metadata.StartAt.Format(time.RFC3339),
+		CompletedAt:  output.Metadata.CompleteAt.Format(time.RFC3339),
+		Duration:     output.Metadata.CompleteAt.Sub(output.Metadata.StartAt).Round(time.Second).String(),
+		SuccessCount: okCount,
+		ErrorCount:   errorCount,
+		SuccessRate:  fmt.Sprintf("%.1f", successRate),
+		FooterDate:   time.Now().Format("2006-01-02 15:04:05"),
+	}
+
+	// Parse and execute template
+	tmpl, err := template.New("report").Parse(htmlTemplate)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse template: %w", err)
+	}
+
+	var buf strings.Builder
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", fmt.Errorf("failed to execute template: %w", err)
+	}
+
+	return buf.String(), nil
+}
+
+var reportStatsCmd = &cobra.Command{
+	Use:   "stats",
+	Short: "Show analytics summary for engagement",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		id, _ := cmd.Flags().GetString("id")
+		path := fmt.Sprintf("results/%s/results.json", id)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		var output RunOutput
+		if err := json.Unmarshal(data, &output); err != nil {
+			return err
+		}
+
+		total := len(output.Results)
+		ok, fail, soon := 0, 0, 0
+
+		for _, r := range output.Results {
+			if r.Status == "ok" {
+				ok++
+			} else {
+				fail++
+			}
+			if r.TLSExpiry != "" {
+				if t, err := time.Parse(time.RFC3339, r.TLSExpiry); err == nil && time.Until(t) < (30*24*time.Hour) {
+					soon++
+				}
+			}
+		}
+		fmt.Printf("Targets: %d | OK: %d | Fail: %d | TLS <30d: %d\n", total, ok, fail, soon)
+		return nil
+	},
+}
+
 func init() {
-	reportGenerateCmd.Flags().String("id", "", "Engagement id")
+	reportGenerateCmd.Flags().String("id", "", "Engagement ID")
+	reportGenerateCmd.Flags().String("format", "md", "Output format: json|md|html")
+	reportStatsCmd.Flags().String("id", "", "Engagement ID")
 	reportCmd.AddCommand(reportGenerateCmd)
+	reportCmd.AddCommand(reportStatsCmd)
 }
