@@ -2,32 +2,17 @@ package cmd
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sync"
 	"time"
 
+	"github.com/khanhnv2901/seca-cli/internal/checker"
 	"github.com/spf13/cobra"
-	"golang.org/x/time/rate"
 )
-
-type CheckResult struct {
-	Target       string    `json:"target"`
-	CheckedAt    time.Time `json:"checked_at"`
-	Status       string    `json:"status"`
-	HTTPStatus   int       `json:"http_status,omitempty"`
-	ServerHeader string    `json:"server_header,omitempty"`
-	TLSExpiry    string    `json:"tls_expiry,omitempty"`
-	Notes        string    `json:"notes,omitempty"`
-	Error        string    `json:"error,omitempty"`
-}
 
 type RunMetadata struct {
 	Operator       string    `json:"operator"`
@@ -42,8 +27,8 @@ type RunMetadata struct {
 }
 
 type RunOutput struct {
-	Metadata RunMetadata   `json:"metadata"`
-	Results  []CheckResult `json:"results"`
+	Metadata RunMetadata          `json:"metadata"`
+	Results  []checker.CheckResult `json:"results"`
 }
 
 var (
@@ -83,7 +68,7 @@ var checkHTTPCmd = &cobra.Command{
 		}
 
 		if !roeConfirm {
-			return fmt.Errorf("this action requires -- roe-confirm to proceed (ensures explicit written authorization)")
+			return fmt.Errorf("this action requires --roe-confirm to proceed (ensures explicit written authorization)")
 		}
 
 		if operator == "" {
@@ -99,7 +84,7 @@ var checkHTTPCmd = &cobra.Command{
 			}
 
 			// Auto-force hash-signing (already done later)
-			// Nothing to change here, but we’ll print a notice
+			// Nothing to change here, but we'll print a notice
 			fmt.Println("→ Hash-signing of audit and result files enforced")
 
 			// If raw audit capture used, require retentionDays > 0
@@ -129,123 +114,40 @@ var checkHTTPCmd = &cobra.Command{
 		dir := filepath.Join(resultsDir, id)
 		_ = os.MkdirAll(dir, 0o755)
 
-		// rate limiter & context
-		limiter := rate.NewLimiter(rate.Limit(rateLimit), rateLimit)
-		ctx := context.Background()
-
-		// worker pool
-		sem := make(chan struct{}, concurrency)
-		var wg sync.WaitGroup
-		mu := sync.Mutex{}
-		results := make([]CheckResult, 0, len(eng.Scope))
-
-		for _, target := range eng.Scope {
-			wg.Add(1)
-			go func(t string) {
-				defer wg.Done()
-				sem <- struct{}{}
-				defer func() { <-sem }()
-				start := time.Now()
-				_ = limiter.Wait(ctx)
-
-				r := CheckResult{
-					Target:    t,
-					CheckedAt: time.Now().UTC(),
-				}
-
-				// normalize URL
-				u := t
-				parsed, err := url.Parse(t)
-				if err != nil || parsed.Scheme == "" {
-					u = "http://" + t
-				}
-
-				// HEAD (safe)
-				client := &http.Client{
-					Timeout: time.Duration(timeoutSecs) * time.Second,
-					Transport: &http.Transport{
-						TLSClientConfig: &tls.Config{InsecureSkipVerify: false},
-					},
-				}
-
-				req, _ := http.NewRequest("HEAD", u, nil)
-				resp, err := client.Do(req)
-				if err != nil {
-					// try GET as fallback (some servers disallow HEAD)
-					req2, _ := http.NewRequest("GET", u, nil)
-					resp2, err2 := client.Do(req2)
-					if err2 != nil {
-						r.Status = "error"
-						r.Error = err2.Error()
-						// write audit row for this failure
-						_ = AppendAuditRow(id, operator, "check http", t, r.Status, 0, "", r.Notes, r.Error, time.Since(start).Seconds())
-
-						mu.Lock()
-						results = append(results, r)
-						mu.Unlock()
-						return
-					}
-					resp = resp2
-					// drain body
-					_, _ = io.Copy(io.Discard, resp.Body)
-				}
-
-				r.HTTPStatus = resp.StatusCode
-				r.ServerHeader = resp.Header.Get("Server")
-
-				r.Status = "ok"
-
-				// TLS expiry
-				if resp.TLS != nil && len(resp.TLS.PeerCertificates) > 0 {
-					cert := resp.TLS.PeerCertificates[0]
-					r.TLSExpiry = cert.NotAfter.Format(time.RFC3339)
-					// add simple note if expiring soon
-					if time.Until(cert.NotAfter) < (14 * 24 * time.Hour) {
-						r.Notes = "TLS certificate expires soon"
-					}
-				}
-
-				// optional raw capture
-				if auditAppendRaw {
-					bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-					_ = SaveRawCapture(id, t, resp.Header, string(bodyBytes))
-				} else {
-					_, _ = io.Copy(io.Discard, resp.Body)
-				}
-				if resp.Body != nil {
-					_ = resp.Body.Close()
-				}
-
-				// optional robots.txt fetch (safe, small GET)
-				if parsed == nil {
-					parsed, _ = url.Parse(u)
-				}
-
-				robotsURL := fmt.Sprintf("%s://%s/robots.txt", parsed.Scheme, parsed.Host)
-				rr, err := client.Get(robotsURL)
-				if err == nil {
-					if rr.StatusCode == 200 {
-						r.Notes = "robots.txt found"
-					}
-
-					_, _ = io.Copy(io.Discard, rr.Body)
-					rr.Body.Close()
-				}
-
-				// write audit row for successful check
-				_ = AppendAuditRow(id, operator, "check http", t, r.Status, r.HTTPStatus, r.TLSExpiry, r.Notes, r.Error, time.Since(start).Seconds())
-
-				mu.Lock()
-				results = append(results, r)
-				mu.Unlock()
-				if resp.Body != nil {
-					_ = resp.Body.Close()
-				}
-
-			}(target)
+		// Create HTTP checker
+		httpChecker := &checker.HTTPChecker{
+			Timeout:    time.Duration(timeoutSecs) * time.Second,
+			CaptureRaw: auditAppendRaw,
+			RawHandler: func(target string, headers http.Header, bodySnippet string) error {
+				return SaveRawCapture(id, target, headers, bodySnippet)
+			},
 		}
 
-		wg.Wait()
+		// Create audit function
+		auditFn := func(target string, result checker.CheckResult, duration float64) error {
+			return AppendAuditRow(
+				id,
+				operator,
+				httpChecker.Name(),
+				target,
+				result.Status,
+				result.HTTPStatus,
+				result.TLSExpiry,
+				result.Notes,
+				result.Error,
+				duration,
+			)
+		}
+
+		// Create runner and execute checks
+		runner := &checker.Runner{
+			Concurrency: concurrency,
+			RateLimit:   rateLimit,
+			Timeout:     time.Duration(timeoutSecs) * time.Second,
+		}
+
+		ctx := context.Background()
+		results := runner.RunChecks(ctx, eng.Scope, httpChecker, auditFn)
 
 		// Write results JSON
 		resultsPath := filepath.Join(dir, "results.json")

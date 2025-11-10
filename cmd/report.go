@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/khanhnv2901/seca-cli/internal/checker"
 	"github.com/spf13/cobra"
 )
 
@@ -174,7 +175,7 @@ func generateMarkdownReport(output *RunOutput) (string, error) {
 // TemplateData holds the data for HTML template rendering
 type TemplateData struct {
 	Metadata     RunMetadata
-	Results      []CheckResult
+	Results      []checker.CheckResult
 	GeneratedAt  string
 	StartedAt    string
 	CompletedAt  string

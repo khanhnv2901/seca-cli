@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/khanhnv2901/seca-cli/internal/checker"
 )
 
 func TestGenerateJSONReport(t *testing.T) {
@@ -19,7 +21,7 @@ func TestGenerateJSONReport(t *testing.T) {
 			AuditHash:      "abc123def456",
 			TotalTargets:   2,
 		},
-		Results: []CheckResult{
+		Results: []checker.CheckResult{
 			{
 				Target:       "https://example.com",
 				CheckedAt:    time.Now(),
@@ -71,7 +73,7 @@ func TestGenerateMarkdownReport(t *testing.T) {
 			AuditHash:      "abc123def456",
 			TotalTargets:   2,
 		},
-		Results: []CheckResult{
+		Results: []checker.CheckResult{
 			{
 				Target:       "https://example.com",
 				CheckedAt:    time.Now(),
@@ -156,7 +158,7 @@ func TestGenerateHTMLReport(t *testing.T) {
 			AuditHash:      "abc123def456",
 			TotalTargets:   2,
 		},
-		Results: []CheckResult{
+		Results: []checker.CheckResult{
 			{
 				Target:       "https://example.com",
 				CheckedAt:    time.Now(),
@@ -271,7 +273,7 @@ func TestGenerateMarkdownReport_EmptyResults(t *testing.T) {
 			CompleteAt:     time.Now(),
 			TotalTargets:   0,
 		},
-		Results: []CheckResult{},
+		Results: []checker.CheckResult{},
 	}
 
 	report, err := generateMarkdownReport(output)
@@ -299,7 +301,7 @@ func TestGenerateHTMLReport_EmptyResults(t *testing.T) {
 			CompleteAt:     time.Now(),
 			TotalTargets:   0,
 		},
-		Results: []CheckResult{},
+		Results: []checker.CheckResult{},
 	}
 
 	report, err := generateHTMLReport(output)
@@ -331,7 +333,7 @@ func TestGenerateMarkdownReport_SummaryStatistics(t *testing.T) {
 			CompleteAt:     time.Now(),
 			TotalTargets:   4,
 		},
-		Results: []CheckResult{
+		Results: []checker.CheckResult{
 			{Target: "https://example1.com", Status: "ok"},
 			{Target: "https://example2.com", Status: "ok"},
 			{Target: "https://example3.com", Status: "ok"},
@@ -369,7 +371,7 @@ func TestGenerateHTMLReport_SummaryStatistics(t *testing.T) {
 			CompleteAt:     time.Now(),
 			TotalTargets:   4,
 		},
-		Results: []CheckResult{
+		Results: []checker.CheckResult{
 			{Target: "https://example1.com", Status: "ok"},
 			{Target: "https://example2.com", Status: "ok"},
 			{Target: "https://example3.com", Status: "ok"},
@@ -410,7 +412,7 @@ func TestGenerateMarkdownReport_DurationCalculation(t *testing.T) {
 			CompleteAt:     complete,
 			TotalTargets:   1,
 		},
-		Results: []CheckResult{
+		Results: []checker.CheckResult{
 			{Target: "https://example.com", Status: "ok"},
 		},
 	}
@@ -437,7 +439,7 @@ func TestGenerateHTMLReport_SpecialCharactersEscaping(t *testing.T) {
 			CompleteAt:     time.Now(),
 			TotalTargets:   1,
 		},
-		Results: []CheckResult{
+		Results: []checker.CheckResult{
 			{
 				Target: "https://example.com",
 				Status: "ok",
@@ -470,7 +472,7 @@ func TestGenerateMarkdownReport_OptionalFields(t *testing.T) {
 			TotalTargets:   1,
 			AuditHash:      "", // Empty hash
 		},
-		Results: []CheckResult{
+		Results: []checker.CheckResult{
 			{
 				Target:       "https://example.com",
 				Status:       "ok",
@@ -507,7 +509,7 @@ func TestReportStatsCmd_CalculationLogic(t *testing.T) {
 			EngagementName: "Stats Test",
 			TotalTargets:   5,
 		},
-		Results: []CheckResult{
+		Results: []checker.CheckResult{
 			{Target: "https://example1.com", Status: "ok", TLSExpiry: ""},
 			{Target: "https://example2.com", Status: "ok", TLSExpiry: time.Now().Add(10 * 24 * time.Hour).Format(time.RFC3339)}, // Expires soon
 			{Target: "https://example3.com", Status: "ok", TLSExpiry: time.Now().Add(60 * 24 * time.Hour).Format(time.RFC3339)}, // Expires later
@@ -617,7 +619,7 @@ func TestReportStatsCmd_EmptyResults(t *testing.T) {
 			EngagementID: "test-empty",
 			TotalTargets: 0,
 		},
-		Results: []CheckResult{},
+		Results: []checker.CheckResult{},
 	}
 
 	total := len(output.Results)
@@ -643,7 +645,7 @@ func TestReportStatsCmd_EmptyResults(t *testing.T) {
 
 func TestReportStatsCmd_AllSuccessful(t *testing.T) {
 	output := RunOutput{
-		Results: []CheckResult{
+		Results: []checker.CheckResult{
 			{Target: "https://example1.com", Status: "ok"},
 			{Target: "https://example2.com", Status: "ok"},
 			{Target: "https://example3.com", Status: "ok"},
@@ -670,7 +672,7 @@ func TestReportStatsCmd_AllSuccessful(t *testing.T) {
 
 func TestReportStatsCmd_AllFailed(t *testing.T) {
 	output := RunOutput{
-		Results: []CheckResult{
+		Results: []checker.CheckResult{
 			{Target: "https://example1.com", Status: "error"},
 			{Target: "https://example2.com", Status: "error"},
 			{Target: "https://example3.com", Status: "error"},
@@ -699,7 +701,7 @@ func TestTemplateData_Structure(t *testing.T) {
 	// Verify TemplateData has all required fields
 	data := TemplateData{
 		Metadata:     RunMetadata{EngagementID: "test"},
-		Results:      []CheckResult{},
+		Results:      []checker.CheckResult{},
 		GeneratedAt:  "2025-01-01T00:00:00Z",
 		StartedAt:    "2025-01-01T00:00:00Z",
 		CompletedAt:  "2025-01-01T00:05:00Z",

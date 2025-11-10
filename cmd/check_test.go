@@ -7,10 +7,12 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/khanhnv2901/seca-cli/internal/checker"
 )
 
 func TestCheckResult_JSON(t *testing.T) {
-	result := CheckResult{
+	result := checker.CheckResult{
 		Target:       "https://example.com",
 		CheckedAt:    time.Now().UTC(),
 		Status:       "ok",
@@ -28,7 +30,7 @@ func TestCheckResult_JSON(t *testing.T) {
 	}
 
 	// Unmarshal back
-	var decoded CheckResult
+	var decoded checker.CheckResult
 	err = json.Unmarshal(data, &decoded)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal: %v", err)
@@ -48,7 +50,7 @@ func TestCheckResult_JSON(t *testing.T) {
 }
 
 func TestCheckResult_WithError(t *testing.T) {
-	result := CheckResult{
+	result := checker.CheckResult{
 		Target:    "https://example.com",
 		CheckedAt: time.Now().UTC(),
 		Status:    "error",
@@ -104,7 +106,7 @@ func TestRunOutput_JSON(t *testing.T) {
 			CompleteAt:     time.Now(),
 			TotalTargets:   2,
 		},
-		Results: []CheckResult{
+		Results: []checker.CheckResult{
 			{
 				Target:     "https://example.com",
 				CheckedAt:  time.Now(),
@@ -268,7 +270,7 @@ func TestHTTPCheck_VariousStatusCodes(t *testing.T) {
 
 func TestCheckResult_Marshaling_OmitEmpty(t *testing.T) {
 	// Test that omitempty works for optional fields
-	result := CheckResult{
+	result := checker.CheckResult{
 		Target:    "https://example.com",
 		CheckedAt: time.Now(),
 		Status:    "ok",
@@ -318,7 +320,7 @@ func TestHTTPCheck_Timeout(t *testing.T) {
 }
 
 func TestCheckResult_SuccessfulCheck(t *testing.T) {
-	result := CheckResult{
+	result := checker.CheckResult{
 		Target:       "https://api.example.com",
 		CheckedAt:    time.Now().UTC(),
 		Status:       "ok",
