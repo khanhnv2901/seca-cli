@@ -236,7 +236,7 @@ var reportStatsCmd = &cobra.Command{
 	Short: "Show analytics summary for engagement",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		id, _ := cmd.Flags().GetString("id")
-		path := fmt.Sprintf("results/%s/results.json", id)
+		path := filepath.Join(resultsDir, id, "results.json")
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return err
