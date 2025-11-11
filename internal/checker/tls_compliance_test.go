@@ -14,7 +14,7 @@ func TestTLSVersionString(t *testing.T) {
 		version  uint16
 		expected string
 	}{
-		{tls.VersionSSL30, "SSL 3.0"},
+		{versionSSL30, "SSL 3.0"},
 		{tls.VersionTLS10, "TLS 1.0"},
 		{tls.VersionTLS11, "TLS 1.1"},
 		{tls.VersionTLS12, "TLS 1.2"},
@@ -173,14 +173,14 @@ func TestAnalyzeTLSCompliance_WithValidCertificate(t *testing.T) {
 		Issuer: pkix.Name{
 			CommonName: "Example CA",
 		},
-		DNSNames:            []string{"example.com", "www.example.com"},
-		SignatureAlgorithm:  x509.SHA256WithRSA,
-		PublicKeyAlgorithm:  x509.RSA,
+		DNSNames:           []string{"example.com", "www.example.com"},
+		SignatureAlgorithm: x509.SHA256WithRSA,
+		PublicKeyAlgorithm: x509.RSA,
 	}
 
 	connState := &tls.ConnectionState{
-		Version:           tls.VersionTLS12,
-		CipherSuite:       tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+		Version:          tls.VersionTLS12,
+		CipherSuite:      tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 		PeerCertificates: []*x509.Certificate{cert},
 	}
 
@@ -218,8 +218,8 @@ func TestAnalyzeTLSCompliance_ExpiredCertificate(t *testing.T) {
 	}
 
 	connState := &tls.ConnectionState{
-		Version:           tls.VersionTLS12,
-		CipherSuite:       tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+		Version:          tls.VersionTLS12,
+		CipherSuite:      tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 		PeerCertificates: []*x509.Certificate{cert},
 	}
 
@@ -261,8 +261,8 @@ func TestAnalyzeTLSCompliance_SelfSignedCertificate(t *testing.T) {
 	}
 
 	connState := &tls.ConnectionState{
-		Version:           tls.VersionTLS12,
-		CipherSuite:       tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+		Version:          tls.VersionTLS12,
+		CipherSuite:      tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 		PeerCertificates: []*x509.Certificate{cert},
 	}
 
@@ -291,11 +291,11 @@ func TestAnalyzeTLSCompliance_SelfSignedCertificate(t *testing.T) {
 
 func TestCheckTLSVersion_AllVersions(t *testing.T) {
 	tests := []struct {
-		name            string
-		version         uint16
+		name              string
+		version           uint16
 		shouldBeCompliant bool
 	}{
-		{"SSL 3.0", tls.VersionSSL30, false},
+		{"SSL 3.0", versionSSL30, false},
 		{"TLS 1.0", tls.VersionTLS10, false},
 		{"TLS 1.1", tls.VersionTLS11, false},
 		{"TLS 1.2", tls.VersionTLS12, true},

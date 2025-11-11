@@ -8,6 +8,11 @@ import (
 	"time"
 )
 
+// versionSSL30 represents the legacy SSL 3.0 protocol version (0x0300).
+// Defined locally so we can detect/report SSL 3.0 without referencing the
+// deprecated tls.VersionSSL30 symbol.
+const versionSSL30 uint16 = 0x0300
+
 // Weak cipher suites that should not be used (PCI DSS 4.1)
 var weakCipherSuites = map[uint16]string{
 	tls.TLS_RSA_WITH_RC4_128_SHA:                "TLS_RSA_WITH_RC4_128_SHA",
@@ -261,7 +266,7 @@ func checkCertificateCompliance(certInfo *CertificateInfo, result *TLSCompliance
 // tlsVersionString converts TLS version constant to string
 func tlsVersionString(version uint16) string {
 	switch version {
-	case tls.VersionSSL30:
+	case versionSSL30:
 		return "SSL 3.0"
 	case tls.VersionTLS10:
 		return "TLS 1.0"
