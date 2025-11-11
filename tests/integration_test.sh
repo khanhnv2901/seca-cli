@@ -119,44 +119,85 @@ if echo "$CHECK_OUTPUT" | grep -q "Run complete"; then
 else
     echo -e "${YELLOW}⚠ HTTP checks may have partial failures (this is ok for testing)${NC}"
 fi
+
+# Try to extract the actual results path from the output
+EXTRACTED_RESULTS=$(echo "$CHECK_OUTPUT" | grep -oP 'Results: \K[^[:space:]]+' | head -1)
+if [ -n "$EXTRACTED_RESULTS" ]; then
+    # Extract directory path
+    EXTRACTED_DIR=$(dirname "$EXTRACTED_RESULTS")
+    echo "  Results directory: $EXTRACTED_DIR"
+fi
 echo ""
 
 # Test 8: Verify results directory structure
 echo -e "${YELLOW}Test 8: Verifying results directory structure...${NC}"
-RESULTS_DIR="./results/$ENGAGEMENT_ID"
 
-if [ -d "$RESULTS_DIR" ]; then
-    echo -e "${GREEN}✓ Results directory exists${NC}"
+# Get the actual results directory path from the check output
+# The seca-cli uses XDG data directory by default (~/.local/share/seca-cli/results on Linux)
+# First check if we extracted the path from the output, otherwise try common locations
+RESULTS_DIR=""
 
-    if [ -f "$RESULTS_DIR/audit.csv" ]; then
-        echo -e "${GREEN}✓ audit.csv exists${NC}"
-    else
-        echo -e "${RED}✗ audit.csv not found${NC}"
-        exit 1
-    fi
-
-    if [ -f "$RESULTS_DIR/results.json" ]; then
-        echo -e "${GREEN}✓ results.json exists${NC}"
-    else
-        echo -e "${RED}✗ results.json not found${NC}"
-        exit 1
-    fi
-
-    if [ -f "$RESULTS_DIR/audit.csv.sha256" ]; then
-        echo -e "${GREEN}✓ audit.csv.sha256 exists${NC}"
-    else
-        echo -e "${RED}✗ audit.csv.sha256 not found${NC}"
-        exit 1
-    fi
-
-    if [ -f "$RESULTS_DIR/results.json.sha256" ]; then
-        echo -e "${GREEN}✓ results.json.sha256 exists${NC}"
-    else
-        echo -e "${RED}✗ results.json.sha256 not found${NC}"
-        exit 1
-    fi
+if [ -n "$EXTRACTED_DIR" ] && [ -d "$EXTRACTED_DIR" ]; then
+    RESULTS_DIR="$EXTRACTED_DIR"
+    echo -e "${GREEN}✓ Using extracted results directory: $RESULTS_DIR${NC}"
 else
-    echo -e "${RED}✗ Results directory not found${NC}"
+    # Try common locations
+    POSSIBLE_DIRS=(
+        "./results/$ENGAGEMENT_ID"
+        "$HOME/.local/share/seca-cli/results/$ENGAGEMENT_ID"
+        "$HOME/Library/Application Support/seca-cli/results/$ENGAGEMENT_ID"
+        "$LOCALAPPDATA/seca-cli/results/$ENGAGEMENT_ID"
+    )
+
+    for dir in "${POSSIBLE_DIRS[@]}"; do
+        if [ -d "$dir" ]; then
+            RESULTS_DIR="$dir"
+            echo -e "${GREEN}✓ Found results directory at: $RESULTS_DIR${NC}"
+            break
+        fi
+    done
+fi
+
+if [ -z "$RESULTS_DIR" ]; then
+    echo -e "${RED}✗ Results directory not found in any expected location${NC}"
+    if [ -n "$EXTRACTED_DIR" ]; then
+        echo "Extracted from output but not found: $EXTRACTED_DIR"
+    fi
+    echo "Checked locations:"
+    for dir in "${POSSIBLE_DIRS[@]}"; do
+        echo "  - $dir"
+    done
+    echo ""
+    echo "Check output was:"
+    echo "$CHECK_OUTPUT"
+    exit 1
+fi
+
+if [ -f "$RESULTS_DIR/audit.csv" ]; then
+    echo -e "${GREEN}✓ audit.csv exists${NC}"
+else
+    echo -e "${RED}✗ audit.csv not found${NC}"
+    exit 1
+fi
+
+if [ -f "$RESULTS_DIR/results.json" ]; then
+    echo -e "${GREEN}✓ results.json exists${NC}"
+else
+    echo -e "${RED}✗ results.json not found${NC}"
+    exit 1
+fi
+
+if [ -f "$RESULTS_DIR/audit.csv.sha256" ]; then
+    echo -e "${GREEN}✓ audit.csv.sha256 exists${NC}"
+else
+    echo -e "${RED}✗ audit.csv.sha256 not found${NC}"
+    exit 1
+fi
+
+if [ -f "$RESULTS_DIR/results.json.sha256" ]; then
+    echo -e "${GREEN}✓ results.json.sha256 exists${NC}"
+else
+    echo -e "${RED}✗ results.json.sha256 not found${NC}"
     exit 1
 fi
 echo ""

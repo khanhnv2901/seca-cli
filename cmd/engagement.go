@@ -22,10 +22,6 @@ type Engagement struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// Deprecated: engagementsFile is kept for backward compatibility in tests
-// Use getEngagementsFilePath() instead
-const engagementsFile = "engagements.json"
-
 var engagementCmd = &cobra.Command{
 	Use:   "engagement",
 	Short: "Manage engagements (create/list/add-scope...)",
