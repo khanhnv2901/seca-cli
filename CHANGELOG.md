@@ -145,9 +145,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.0] - 2025-11-12
+
+### Added
+
+#### TLS Configuration Audit
+- **NIST SP 800-52r2 Compliance**: TLS analyzer now evaluates negotiated versions, suites, and certificates against NIST controls alongside OWASP ASVS §9 and PCI DSS 4.1.
+- **Cipher Suite Intelligence**: Explicit allow/deny lists for AES-GCM suites plus forward-secrecy checks ensure only compliant ECDHE/DHE handshakes pass.
+- **Certificate Insights**: Results now capture chain depth, verified intermediates, subject list, signature algorithms, and key size to make investigations actionable.
+
+#### Reporting Enhancements
+- Detailed compliance sections per standard with pass/fail IDs for cross-referencing audit evidence.
+- New recommendations surface remediation guidance (e.g., rotate expiring certs, remove ChaCha-only stacks, upgrade to TLS 1.3).
+
+### Changed
+- Overall compliance status now fails when any NIST SP 800-52r2 requirement is violated (e.g., TLS 1.0, ChaCha20-Poly1305-only stacks on TLS 1.3).
+- Certificate validation consumes verified chains from the TLS handshake, ensuring accurate trust-path analysis instead of assuming success.
+- RSA/ECC key size validation leverages precise bit lengths extracted from `crypto/ecdsa`, `ed25519`, and RSA keys.
+
+### Fixed
+- Hardened `go vet`/`golangci-lint` workflows by vendoring a project-local lint binary and cache path, ensuring linting runs cleanly without host-level permissions.
+
+---
+
 ## [Unreleased]
 
-### Planned for v1.2.0
+### Planned for v1.3.0
 
 - JSON audit log format (in addition to CSV)
 - Dashboard for visualizing results
@@ -167,6 +190,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## Version History
+
+### v1.2.0 (2025-11-12)
+- TLS configuration audit with NIST SP 800-52r2 controls
+- Expanded certificate metadata (chain depth, signatures, key sizes)
+- Strong/weak cipher tracking with AES-GCM preference and PFS enforcement
+- Integrated lint workflow improvements
 
 ### v1.1.0 (2025-11-11)
 - DNS checker feature with comprehensive record lookups
