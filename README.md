@@ -12,6 +12,8 @@ A professional command-line tool for managing authorized security testing engage
 - **Engagement Management** - Create and track security testing engagements with ROE (Rules of Engagement) acknowledgment
 - **Scope Control** - Define and manage authorized targets for testing
 - **Safe HTTP Checks** - Perform non-invasive HTTP/HTTPS checks with rate limiting and concurrency control
+- **TLS/Crypto Compliance** - OWASP ASVS §9 and PCI DSS 4.1 validation for TLS versions, cipher suites, and certificates
+- **Security Headers Analysis** - OWASP Secure Headers Project compliance checking with scoring and recommendations
 - **Compliance Mode** - Built-in compliance enforcement with automatic hash signing and retention policies
 - **Audit Trail** - Immutable CSV audit logs with timestamps and operator attribution
 - **Evidence Integrity** - SHA256 hash generation and verification for all evidence files
@@ -427,7 +429,10 @@ make clean                   # Remove evidence packages
 ### What SECA-CLI Does
 
 ✅ HTTP HEAD/GET requests to check availability
-✅ TLS certificate expiry checks
+✅ TLS/crypto compliance validation (OWASP ASVS §9, PCI DSS 4.1)
+✅ TLS certificate expiry and validation checks
+✅ Security headers analysis (OWASP Secure Headers)
+✅ Cipher suite strength analysis
 ✅ robots.txt retrieval
 ✅ Server header inspection
 ✅ Rate-limited, controlled testing
@@ -439,6 +444,142 @@ make clean                   # Remove evidence packages
 ❌ Brute force attacks
 ❌ Service disruption
 ❌ Unauthorized access
+
+## TLS/Crypto Compliance (OWASP ASVS §9, PCI DSS 4.1)
+
+SECA-CLI automatically validates TLS/cryptography configuration against **OWASP ASVS Section 9 (Communications)** and **PCI DSS 4.1 (Strong Cryptography)** requirements for all HTTPS targets.
+
+### Compliance Checks
+
+**TLS Protocol Version (ASVS 9.1.3, PCI DSS 4.1)**
+- ✅ TLS 1.3 (Recommended)
+- ✅ TLS 1.2 with strong cipher suites
+- ❌ TLS 1.1, TLS 1.0, SSL 3.0 (Non-compliant)
+
+**Cipher Suite Strength (ASVS 9.1.2, PCI DSS 4.1)**
+- ✅ AEAD cipher suites (AES-GCM, ChaCha20-Poly1305)
+- ✅ Perfect Forward Secrecy (ECDHE/DHE key exchange)
+- ❌ RC4, 3DES, CBC-mode ciphers (Weak)
+- Minimum 112-bit effective key strength (PCI DSS)
+
+**Certificate Validation (ASVS 9.2.1, PCI DSS 4.1)**
+- Certificate expiry and validity period
+- RSA keys ≥ 2048 bits, ECC keys ≥ 224 bits
+- SHA-256 or stronger signature algorithms
+- Self-signed certificate detection
+- Certificate chain validation
+
+### Compliance Result Format
+
+```json
+{
+  "tls_compliance": {
+    "compliant": true,
+    "tls_version": "TLS 1.3",
+    "cipher_suite": "TLS_AES_256_GCM_SHA384",
+    "standards": {
+      "owasp_asvs_v9": {
+        "compliant": true,
+        "level": "L1",
+        "passed": ["9.1.2", "9.1.3", "9.2.1"],
+        "failed": []
+      },
+      "pci_dss_4_1": {
+        "compliant": true,
+        "passed": ["4.1-TLS-Version", "4.1-Cipher", "4.1-Certificate-Valid"],
+        "failed": []
+      }
+    },
+    "certificate_info": {
+      "subject": "CN=example.com",
+      "issuer": "CN=Let's Encrypt",
+      "days_until_expiry": 75,
+      "signature_algorithm": "SHA256-RSA",
+      "key_size": 2048
+    },
+    "issues": [],
+    "recommendations": [
+      "Consider upgrading to TLS 1.3 for improved security"
+    ]
+  }
+}
+```
+
+### Non-Compliance Examples
+
+**Critical Issues:**
+- TLS 1.0/1.1 usage → Upgrade to TLS 1.2/1.3 immediately
+- Weak cipher suites (RC4, 3DES) → Use AES-GCM or ChaCha20-Poly1305
+- Expired certificates → Renew certificate immediately
+- Weak RSA keys (<2048 bits) → Generate new certificate with 2048+ bit keys
+
+**High Severity:**
+- SHA-1 certificate signatures → Re-issue with SHA-256+
+- Missing Perfect Forward Secrecy → Enable ECDHE/DHE key exchange
+
+See [OWASP ASVS v5](https://owasp.org/www-project-application-security-verification-standard/) and [PCI DSS v4.0](https://www.pcisecuritystandards.org/) for complete requirements.
+
+## Security Headers Analysis
+
+SECA-CLI automatically analyzes HTTP security headers based on the **OWASP Secure Headers Project** best practices. Each target receives a security score (0-100) and letter grade (A-F).
+
+### Analyzed Headers
+
+**High Severity Headers:**
+- **Strict-Transport-Security (HSTS)** - Forces HTTPS connections (20 points)
+- **Content-Security-Policy (CSP)** - Mitigates XSS and injection attacks (20 points)
+- **X-Frame-Options** - Prevents clickjacking attacks (15 points)
+- **X-Content-Type-Options** - Blocks MIME type sniffing (15 points)
+
+**Medium Severity Headers:**
+- **Referrer-Policy** - Controls referrer information leakage (10 points)
+- **Permissions-Policy** - Restricts browser features (10 points)
+- **Cross-Origin-Opener-Policy (COOP)** - Isolates browsing contexts (5 points)
+- **Cross-Origin-Embedder-Policy (COEP)** - Requires explicit resource permissions (5 points)
+
+### Security Headers Output
+
+Results include:
+- **Score & Grade**: Overall security posture (e.g., 85/100, Grade B)
+- **Present Headers**: Validation and scoring of each header
+- **Missing Headers**: Critical security headers not implemented
+- **Warnings**: Deprecated headers or information disclosure issues
+- **Recommendations**: Specific remediation guidance
+
+### Example Security Headers Result
+
+```json
+{
+  "security_headers": {
+    "score": 85,
+    "grade": "B",
+    "max_score": 100,
+    "headers": {
+      "Strict-Transport-Security": {
+        "present": true,
+        "value": "max-age=31536000; includeSubDomains",
+        "severity": "high",
+        "score": 18,
+        "max_score": 20,
+        "issues": ["Missing 'preload' directive"],
+        "recommendation": "Add 'preload' for HSTS preload list"
+      }
+    },
+    "missing": ["Content-Security-Policy", "Permissions-Policy"],
+    "warnings": ["Server header exposes Apache/2.4.41"]
+  }
+}
+```
+
+### Best Practices
+
+1. **Aim for Grade A** (90+ points) - Implement all critical headers
+2. **Remove information disclosure** - Obfuscate/remove Server and X-Powered-By headers
+3. **Avoid deprecated headers** - Remove X-XSS-Protection, Expect-CT, Public-Key-Pins
+4. **Use strict policies** - Avoid 'unsafe-inline', 'unsafe-eval' in CSP
+5. **Enable HSTS preloading** - Use `includeSubDomains` and `preload` directives
+
+See [OWASP Secure Headers Project](https://owasp.org/www-project-secure-headers/) for detailed guidance.
 
 ## Compliance Standards
 

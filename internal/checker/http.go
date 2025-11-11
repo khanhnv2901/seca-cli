@@ -73,14 +73,43 @@ func (h *HTTPChecker) Check(ctx context.Context, target string) CheckResult {
 	result.ServerHeader = resp.Header.Get("Server")
 	result.Status = "ok"
 
-	// Check TLS certificate expiry
-	if resp.TLS != nil && len(resp.TLS.PeerCertificates) > 0 {
-		cert := resp.TLS.PeerCertificates[0]
-		result.TLSExpiry = cert.NotAfter.Format(time.RFC3339)
+	// Analyze security headers
+	result.SecurityHeaders = AnalyzeSecurityHeaders(resp.Header)
 
-		// Warn if expiring within 14 days
-		if time.Until(cert.NotAfter) < (14 * 24 * time.Hour) {
-			result.Notes = "TLS certificate expires soon"
+	// Analyze TLS/crypto compliance (OWASP ASVS §9, PCI DSS 4.1)
+	if resp.TLS != nil {
+		result.TLSCompliance = AnalyzeTLSCompliance(resp.TLS)
+
+		// Legacy TLS expiry field for backward compatibility
+		if len(resp.TLS.PeerCertificates) > 0 {
+			cert := resp.TLS.PeerCertificates[0]
+			result.TLSExpiry = cert.NotAfter.Format(time.RFC3339)
+
+			// Warn if expiring within 14 days
+			if time.Until(cert.NotAfter) < (14 * 24 * time.Hour) {
+				if result.Notes != "" {
+					result.Notes += "; TLS certificate expires soon"
+				} else {
+					result.Notes = "TLS certificate expires soon"
+				}
+			}
+		}
+
+		// Add compliance warnings to notes
+		if result.TLSCompliance != nil && !result.TLSCompliance.Compliant {
+			criticalIssues := 0
+			for _, issue := range result.TLSCompliance.Issues {
+				if issue.Severity == "critical" {
+					criticalIssues++
+				}
+			}
+			if criticalIssues > 0 {
+				if result.Notes != "" {
+					result.Notes += fmt.Sprintf("; %d critical TLS compliance issue(s)", criticalIssues)
+				} else {
+					result.Notes = fmt.Sprintf("%d critical TLS compliance issue(s)", criticalIssues)
+				}
+			}
 		}
 	}
 
