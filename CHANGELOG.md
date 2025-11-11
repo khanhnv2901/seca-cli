@@ -83,12 +83,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.0] - 2025-11-11
+
+### Added
+
+#### New Features
+- **DNS Checker**: Comprehensive DNS resolution checks for authorized targets
+  - A record lookups (IPv4 addresses)
+  - AAAA record lookups (IPv6 addresses)
+  - CNAME record resolution
+  - MX record checks (mail servers)
+  - NS record lookups (nameservers)
+  - TXT record queries (SPF, DKIM, etc.)
+  - PTR record lookups (reverse DNS)
+  - Custom nameserver support via `--nameservers` flag
+  - Configurable DNS timeout via `--dns-timeout` flag
+- **Report Generation**: Generate comprehensive reports from check results
+  - JSON format reports
+  - Markdown format reports
+  - HTML format reports
+  - Statistics and summary reports
+- **XDG Base Directory Support**: Platform-specific data directories
+  - Linux: `~/.local/share/seca-cli/`
+  - macOS: `~/Library/Application Support/seca-cli/`
+  - Windows: `%LOCALAPPDATA%\seca-cli\`
+  - Automatic migration from old `./` location
+
+#### Commands
+- `seca check dns` - Run safe DNS resolution checks on scoped targets
+- `seca report generate` - Generate reports in various formats
+- `seca report stats` - Show statistics for check results
+- `seca info` - Display configuration and data directory paths
+
+#### Improvements
+- Comprehensive test suite with 93 tests (19 DNS + 17 HTTP + 57 cmd tests)
+- Refactored test structure for better organization
+- Integration tests updated for XDG directory support
+- Improved error messages and debugging output
+- Fixed linting issues
+
+#### Bug Fixes
+- Fixed results directory detection in integration tests
+- Removed unused deprecated constants
+- Fixed indentation in test scripts
+
+### Changed
+- Test structure reorganized: HTTP tests moved to `internal/checker/http_test.go`
+- Data storage now uses platform-specific directories by default
+- Improved integration test reliability with multi-location directory search
+
+### Technical Details
+
+#### New Dependencies
+- No new external dependencies added
+
+#### Test Coverage
+- Total tests: 93 (up from 29)
+- DNS checker: 19 tests with comprehensive coverage
+- HTTP checker: 17 tests (refactored from cmd package)
+- Command tests: 57 tests
+
+---
+
 ## [Unreleased]
 
-### Planned for v1.1.0
+### Planned for v1.2.0
 
 - JSON audit log format (in addition to CSV)
-- Report generation command
 - Dashboard for visualizing results
 - Enhanced TLS analysis
 - Custom check scripts
@@ -97,7 +158,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Under Consideration
 
-- DNS enumeration (with authorization)
 - SSL/TLS certificate validation
 - Port scanning (safe, authorized only)
 - Webhook notifications
@@ -107,6 +167,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## Version History
+
+### v1.1.0 (2025-11-11)
+- DNS checker feature with comprehensive record lookups
+- Report generation (JSON, Markdown, HTML)
+- XDG Base Directory support
+- 93 comprehensive tests
+- Refactored test structure
 
 ### v1.0.0 (2025-01-15)
 - Initial release
