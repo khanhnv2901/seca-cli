@@ -64,6 +64,10 @@ func TestAnalyzeTLSCompliance_TLS12_StrongCipher(t *testing.T) {
 		t.Error("Expected PCI DSS compliance")
 	}
 
+	if !result.Standards.NIST80052r2.Compliant {
+		t.Error("Expected NIST SP 800-52r2 compliance")
+	}
+
 	if len(result.Issues) > 0 {
 		t.Errorf("Expected no issues, got %d", len(result.Issues))
 	}
@@ -89,6 +93,37 @@ func TestAnalyzeTLSCompliance_TLS13(t *testing.T) {
 	if !result.Standards.OWASPASVS9.Compliant || !result.Standards.PCIDSS41.Compliant {
 		t.Error("TLS 1.3 should be compliant with both standards")
 	}
+	if !result.Standards.NIST80052r2.Compliant {
+		t.Error("TLS 1.3 should be NIST SP 800-52r2 compliant with AES-GCM ciphers")
+	}
+}
+
+func TestAnalyzeTLSCompliance_TLS13ChaCha_NISTNonCompliant(t *testing.T) {
+	connState := &tls.ConnectionState{
+		Version:     tls.VersionTLS13,
+		CipherSuite: tls.TLS_CHACHA20_POLY1305_SHA256,
+	}
+
+	result := AnalyzeTLSCompliance(connState)
+
+	if result.Compliant {
+		t.Error("Expected overall non-compliance due to NIST SP 800-52r2 cipher restrictions")
+	}
+
+	if result.Standards.NIST80052r2.Compliant {
+		t.Error("Expected NIST SP 800-52r2 non-compliance for ChaCha20 cipher")
+	}
+
+	foundNISTIssue := false
+	for _, issue := range result.Issues {
+		if issue.Standard == "NIST SP 800-52r2" {
+			foundNISTIssue = true
+			break
+		}
+	}
+	if !foundNISTIssue {
+		t.Error("Expected explicit NIST cipher suite issue")
+	}
 }
 
 func TestAnalyzeTLSCompliance_TLS10_NonCompliant(t *testing.T) {
@@ -113,6 +148,10 @@ func TestAnalyzeTLSCompliance_TLS10_NonCompliant(t *testing.T) {
 
 	if result.Standards.PCIDSS41.Compliant {
 		t.Error("TLS 1.0 should not be PCI DSS compliant")
+	}
+
+	if result.Standards.NIST80052r2.Compliant {
+		t.Error("TLS 1.0 should not be NIST SP 800-52r2 compliant")
 	}
 
 	if len(result.Issues) == 0 {
@@ -159,6 +198,10 @@ func TestAnalyzeTLSCompliance_WeakCipher(t *testing.T) {
 	if !foundCipherIssue {
 		t.Error("Expected cipher suite compliance issue")
 	}
+
+	if result.Standards.NIST80052r2.Compliant {
+		t.Error("Expected NIST SP 800-52r2 failure for weak cipher suite")
+	}
 }
 
 func TestAnalyzeTLSCompliance_WithValidCertificate(t *testing.T) {
@@ -177,11 +220,22 @@ func TestAnalyzeTLSCompliance_WithValidCertificate(t *testing.T) {
 		SignatureAlgorithm: x509.SHA256WithRSA,
 		PublicKeyAlgorithm: x509.RSA,
 	}
+	issuerCert := &x509.Certificate{
+		Subject: pkix.Name{
+			CommonName: "Example Root CA",
+		},
+	}
 
 	connState := &tls.ConnectionState{
-		Version:          tls.VersionTLS12,
-		CipherSuite:      tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-		PeerCertificates: []*x509.Certificate{cert},
+		Version:     tls.VersionTLS12,
+		CipherSuite: tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+		PeerCertificates: []*x509.Certificate{
+			cert,
+			issuerCert,
+		},
+		VerifiedChains: [][]*x509.Certificate{
+			{cert, issuerCert},
+		},
 	}
 
 	result := AnalyzeTLSCompliance(connState)
@@ -198,8 +252,24 @@ func TestAnalyzeTLSCompliance_WithValidCertificate(t *testing.T) {
 		t.Error("Expected valid chain")
 	}
 
+	if result.CertificateInfo.ChainDepth != 2 {
+		t.Errorf("Expected chain depth 2, got %d", result.CertificateInfo.ChainDepth)
+	}
+
+	if result.CertificateInfo.VerifiedChains != 1 {
+		t.Errorf("Expected one verified chain, got %d", result.CertificateInfo.VerifiedChains)
+	}
+
+	if len(result.CertificateInfo.ChainSubjects) != 2 {
+		t.Errorf("Expected two chain subjects, got %d", len(result.CertificateInfo.ChainSubjects))
+	}
+
 	if result.CertificateInfo.SignatureAlg != "SHA256-RSA" {
 		t.Errorf("Expected SHA256-RSA, got %s", result.CertificateInfo.SignatureAlg)
+	}
+
+	if !result.Standards.NIST80052r2.Compliant {
+		t.Error("Expected NIST SP 800-52r2 compliance for valid certificate")
 	}
 }
 
@@ -221,6 +291,7 @@ func TestAnalyzeTLSCompliance_ExpiredCertificate(t *testing.T) {
 		Version:          tls.VersionTLS12,
 		CipherSuite:      tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 		PeerCertificates: []*x509.Certificate{cert},
+		VerifiedChains:   [][]*x509.Certificate{{cert}},
 	}
 
 	result := AnalyzeTLSCompliance(connState)
@@ -244,6 +315,58 @@ func TestAnalyzeTLSCompliance_ExpiredCertificate(t *testing.T) {
 	if !foundExpiryIssue {
 		t.Error("Expected critical certificate expiry issue")
 	}
+
+	if result.Standards.NIST80052r2.Compliant {
+		t.Error("Expected NIST SP 800-52r2 failure for expired certificate")
+	}
+}
+
+func TestAnalyzeTLSCompliance_InvalidCertificateChain(t *testing.T) {
+	now := time.Now()
+	cert := &x509.Certificate{
+		NotBefore: now.Add(-30 * 24 * time.Hour),
+		NotAfter:  now.Add(365 * 24 * time.Hour),
+		Subject: pkix.Name{
+			CommonName: "chain.example.com",
+		},
+		Issuer: pkix.Name{
+			CommonName: "Unknown CA",
+		},
+		SignatureAlgorithm: x509.SHA256WithRSA,
+		PublicKeyAlgorithm: x509.RSA,
+	}
+
+	connState := &tls.ConnectionState{
+		Version:          tls.VersionTLS12,
+		CipherSuite:      tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+		PeerCertificates: []*x509.Certificate{cert},
+		// VerifiedChains intentionally empty to trigger chain issue
+	}
+
+	result := AnalyzeTLSCompliance(connState)
+
+	if result.CertificateInfo == nil {
+		t.Fatal("Expected certificate info to be populated")
+	}
+
+	if result.CertificateInfo.ValidChain {
+		t.Error("Expected invalid chain when no verified chain data is present")
+	}
+
+	chainIssueFound := false
+	for _, issue := range result.Issues {
+		if strings.Contains(issue.Description, "chain could not be validated") {
+			chainIssueFound = true
+			break
+		}
+	}
+	if !chainIssueFound {
+		t.Error("Expected chain validation issue")
+	}
+
+	if result.Standards.NIST80052r2.Compliant {
+		t.Error("Expected NIST SP 800-52r2 non-compliance due to missing chain")
+	}
 }
 
 func TestAnalyzeTLSCompliance_SelfSignedCertificate(t *testing.T) {
@@ -264,6 +387,7 @@ func TestAnalyzeTLSCompliance_SelfSignedCertificate(t *testing.T) {
 		Version:          tls.VersionTLS12,
 		CipherSuite:      tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 		PeerCertificates: []*x509.Certificate{cert},
+		VerifiedChains:   [][]*x509.Certificate{{cert}},
 	}
 
 	result := AnalyzeTLSCompliance(connState)
@@ -286,6 +410,10 @@ func TestAnalyzeTLSCompliance_SelfSignedCertificate(t *testing.T) {
 	}
 	if !foundRecommendation {
 		t.Error("Expected recommendation about self-signed certificate")
+	}
+
+	if !result.Standards.NIST80052r2.Compliant {
+		t.Error("Trusted self-signed/root certificate should remain NIST compliant")
 	}
 }
 
@@ -312,8 +440,9 @@ func TestCheckTLSVersion_AllVersions(t *testing.T) {
 			result := &TLSComplianceResult{
 				Compliant: true,
 				Standards: ComplianceStandards{
-					OWASPASVS9: ComplianceStatus{Compliant: true, Level: "L1"},
-					PCIDSS41:   ComplianceStatus{Compliant: true},
+					OWASPASVS9:  ComplianceStatus{Compliant: true, Level: "L1"},
+					PCIDSS41:    ComplianceStatus{Compliant: true},
+					NIST80052r2: ComplianceStatus{Compliant: true},
 				},
 				Issues:          []ComplianceIssue{},
 				Recommendations: []string{},
@@ -361,6 +490,15 @@ func TestComplianceStandards_Structure(t *testing.T) {
 
 	if result.Standards.PCIDSS41.Failed == nil {
 		t.Error("Expected Failed array to be initialized")
+	}
+
+	// Check NIST structure
+	if result.Standards.NIST80052r2.Passed == nil {
+		t.Error("Expected NIST Passed array to be initialized")
+	}
+
+	if result.Standards.NIST80052r2.Failed == nil {
+		t.Error("Expected NIST Failed array to be initialized")
 	}
 }
 
