@@ -80,8 +80,9 @@ var checkHTTPCmd = &cobra.Command{
 			VerificationCmdBuilder: makeVerificationCommand("results.json"),
 			SupportsRawCapture:     true,
 			PrintSummary: func(results []checker.CheckResult, resultsPath, auditPath, auditHash, resultsHash string, hashAlgo HashAlgorithm) {
-				fmt.Printf("Run complete.\n")
-				fmt.Printf("Results: %s\nAudit: %s\n", resultsPath, auditPath)
+				fmt.Println(colorSuccess("Run complete."))
+				fmt.Printf("%s %s\n", colorInfo("Results:"), resultsPath)
+				fmt.Printf("%s %s\n", colorInfo("Audit:"), auditPath)
 				fmt.Printf("%s audit: %s\n%s results: %s\n", hashAlgo.DisplayName(), auditHash, hashAlgo.DisplayName(), resultsHash)
 			},
 		})
@@ -144,8 +145,9 @@ All checks are safe, non-intrusive DNS queries only.`,
 					}
 				}
 
-				fmt.Printf("DNS Check complete.\n")
-				fmt.Printf("Results: %s\nAudit: %s\n", resultsPath, auditPath)
+				fmt.Println(colorSuccess("DNS Check complete."))
+				fmt.Printf("%s %s\n", colorInfo("Results:"), resultsPath)
+				fmt.Printf("%s %s\n", colorInfo("Audit:"), auditPath)
 				fmt.Printf("%s audit: %s\n%s results: %s\n", hashAlgo.DisplayName(), auditHash, hashAlgo.DisplayName(), resultsHash)
 				fmt.Printf("Summary: %d OK, %d Errors (out of %d targets)\n", okCount, errorCount, len(results))
 			},
@@ -326,8 +328,9 @@ func runCheckCommand(cmd *cobra.Command, config checkConfig) error {
 		config.PrintSummary(results, resultsPath, auditPath, auditHash, resultsHash, hashAlgo)
 	} else {
 		// Default summary
-		fmt.Printf("Run complete.\n")
-		fmt.Printf("Results: %s\nAudit: %s\n", resultsPath, auditPath)
+		fmt.Println(colorSuccess("Run complete."))
+		fmt.Printf("%s %s\n", colorInfo("Results:"), resultsPath)
+		fmt.Printf("%s %s\n", colorInfo("Audit:"), auditPath)
 		fmt.Printf("%s audit: %s\n%s results: %s\n", hashAlgo.DisplayName(), auditHash, hashAlgo.DisplayName(), resultsHash)
 	}
 
@@ -535,17 +538,19 @@ func encryptAuditLog(auditPath, gpgKey string) (string, error) {
 
 // printComplianceSummary prints the compliance mode summary
 func printComplianceSummary(appCtx *AppContext, eng *Engagement, auditHash, resultsHash string, verificationCmd string, auditAppendRaw bool, retentionDays int, hashAlgo HashAlgorithm) {
-	fmt.Println("------------------------------------------------------")
-	fmt.Println("🔒 Compliance Summary")
-	fmt.Printf("Operator: %s\nEngagement: %s (%s)\n", appCtx.Operator, eng.Name, eng.ID)
+	border := strings.Repeat("-", 54)
+	fmt.Println(colorInfo(border))
+	fmt.Println(colorInfo("🔒 Compliance Summary"))
+	fmt.Printf("%s %s\n", colorInfo("Operator:"), appCtx.Operator)
+	fmt.Printf("%s %s (%s)\n", colorInfo("Engagement:"), eng.Name, eng.ID)
 	fmt.Printf("%s audit hash : %s\n", hashAlgo.DisplayName(), auditHash)
 	fmt.Printf("%s results hash: %s\n", hashAlgo.DisplayName(), resultsHash)
-	fmt.Printf("Verification: %s\n", verificationCmd)
+	fmt.Printf("%s %s\n", colorInfo("Verification:"), verificationCmd)
 	if auditAppendRaw {
-		fmt.Printf("Retention: raw captures must be deleted or anonymized after %d day(s).\n", retentionDays)
+		fmt.Printf("%s raw captures must be deleted or anonymized after %d day(s).\n", colorWarn("Retention:"), retentionDays)
 	}
-	fmt.Println("Evidence integrity and retention requirements satisfied.")
-	fmt.Println("------------------------------------------------------")
+	fmt.Println(colorSuccess("Evidence integrity and retention requirements satisfied."))
+	fmt.Println(colorInfo(border))
 }
 
 // addCommonCheckFlags adds flags that are common to all check commands.

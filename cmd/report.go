@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"text/tabwriter"
 	"time"
 
 	"github.com/khanhnv2901/seca-cli/internal/checker"
@@ -20,6 +21,7 @@ import (
 const (
 	htmlTemplatePath     = "templates/report.html"
 	markdownTemplatePath = "templates/report.md"
+	statsTLSSoonWindow   = 30 * 24 * time.Hour
 )
 
 //go:embed templates/report.html templates/report.md
@@ -204,6 +206,23 @@ type TemplateData struct {
 	TrendHistory       []TelemetryRecord
 	TrendSummary       TrendSummary
 	HashAlgorithmLabel string
+}
+
+type reportStatsEntry struct {
+	Target     string `json:"target"`
+	Status     string `json:"status"`
+	HTTPStatus int    `json:"http_status,omitempty"`
+	Notes      string `json:"notes,omitempty"`
+	TLSSoon    bool   `json:"tls_expires_soon"`
+}
+
+type reportStatsSummary struct {
+	EngagementID string             `json:"engagement_id"`
+	Total        int                `json:"total"`
+	Success      int                `json:"success"`
+	Fail         int                `json:"fail"`
+	TLSSoon      int                `json:"tls_expiring"`
+	Results      []reportStatsEntry `json:"results"`
 }
 
 type TrendSummary struct {
@@ -455,9 +474,73 @@ func executeTemplate(tmpl *template.Template, data TemplateData) (string, error)
 	return buf.String(), nil
 }
 
+func summarizeReportStats(output *RunOutput) reportStatsSummary {
+	summary := reportStatsSummary{
+		EngagementID: output.Metadata.EngagementID,
+		Results:      make([]reportStatsEntry, 0, len(output.Results)),
+	}
+
+	for _, r := range output.Results {
+		entry := reportStatsEntry{
+			Target:     r.Target,
+			Status:     r.Status,
+			HTTPStatus: r.HTTPStatus,
+			Notes:      r.Notes,
+		}
+		summary.Total++
+		if strings.EqualFold(r.Status, "ok") {
+			summary.Success++
+		} else {
+			summary.Fail++
+		}
+		if r.TLSExpiry != "" {
+			if t, err := time.Parse(time.RFC3339, r.TLSExpiry); err == nil && time.Until(t) < statsTLSSoonWindow {
+				entry.TLSSoon = true
+				summary.TLSSoon++
+			}
+		}
+		summary.Results = append(summary.Results, entry)
+	}
+
+	return summary
+}
+
+func printStatsText(summary reportStatsSummary) {
+	fmt.Println(colorInfo("Summary"))
+	fmt.Printf("Targets: %d | OK: %s | Fail: %s | TLS <30d: %s\n",
+		summary.Total,
+		colorSuccess(fmt.Sprintf("%d", summary.Success)),
+		colorError(fmt.Sprintf("%d", summary.Fail)),
+		colorWarn(fmt.Sprintf("%d", summary.TLSSoon)),
+	)
+}
+
+func printStatsTable(summary reportStatsSummary) {
+	if len(summary.Results) == 0 {
+		fmt.Println(colorWarn("No targets found in results."))
+		return
+	}
+
+	tw := tabwriter.NewWriter(os.Stdout, 2, 4, 2, ' ', 0)
+	fmt.Fprintln(tw, "TARGET\tSTATUS\tHTTP\tTLS<30d?\tNOTES")
+	for _, entry := range summary.Results {
+		status := formatStatusWithColor(entry.Status)
+		tlsCol := "no"
+		if entry.TLSSoon {
+			tlsCol = colorWarn("yes")
+		}
+		notes := entry.Notes
+		if notes == "" {
+			notes = "-"
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%d\t%s\t%s\n", entry.Target, status, entry.HTTPStatus, tlsCol, notes)
+	}
+	tw.Flush()
+}
+
 func printTelemetryASCII(records []TelemetryRecord) {
 	const barWidth = 40
-	fmt.Println("Telemetry Success Rate Trend")
+	fmt.Println(colorInfo("Telemetry Success Rate Trend"))
 	for _, rec := range records {
 		barLen := int(math.Round((rec.SuccessRate / 100.0) * barWidth))
 		if barLen < 0 {
@@ -485,10 +568,15 @@ var reportStatsCmd = &cobra.Command{
 	Use:   "stats",
 	Short: "Show analytics summary for engagement",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Get application context
 		appCtx := getAppContext(cmd)
 
 		id, _ := cmd.Flags().GetString("id")
+		format, _ := cmd.Flags().GetString("format")
+		format = strings.ToLower(strings.TrimSpace(format))
+		if format == "" {
+			format = "text"
+		}
+
 		path := filepath.Join(appCtx.ResultsDir, id, "results.json")
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -500,22 +588,22 @@ var reportStatsCmd = &cobra.Command{
 		}
 		normalizeRunMetadata(&output.Metadata)
 
-		total := len(output.Results)
-		ok, fail, soon := 0, 0, 0
+		summary := summarizeReportStats(&output)
 
-		for _, r := range output.Results {
-			if r.Status == "ok" {
-				ok++
-			} else {
-				fail++
+		switch format {
+		case "json":
+			payload, err := json.MarshalIndent(summary, jsonPrefix, jsonIndent)
+			if err != nil {
+				return err
 			}
-			if r.TLSExpiry != "" {
-				if t, err := time.Parse(time.RFC3339, r.TLSExpiry); err == nil && time.Until(t) < (30*24*time.Hour) {
-					soon++
-				}
-			}
+			fmt.Println(string(payload))
+		case "table":
+			printStatsTable(summary)
+		case "text":
+			printStatsText(summary)
+		default:
+			return fmt.Errorf("unsupported format %q (use text|table|json)", format)
 		}
-		fmt.Printf("Targets: %d | OK: %d | Fail: %d | TLS <30d: %d\n", total, ok, fail, soon)
 		return nil
 	},
 }
@@ -539,7 +627,7 @@ var reportTelemetryCmd = &cobra.Command{
 			return err
 		}
 		if len(history) == 0 {
-			fmt.Printf("No telemetry records found for engagement %s\n", id)
+			fmt.Printf("%s telemetry records found for engagement %s\n", colorWarn("No"), id)
 			return nil
 		}
 
@@ -564,6 +652,7 @@ func init() {
 	reportGenerateCmd.Flags().String("id", "", "Engagement ID")
 	reportGenerateCmd.Flags().String("format", "md", "Output format: json|md|html|pdf")
 	reportStatsCmd.Flags().String("id", "", "Engagement ID")
+	reportStatsCmd.Flags().String("format", "text", "Output format: text|table|json")
 	reportTelemetryCmd.Flags().String("id", "", "Engagement ID")
 	reportTelemetryCmd.Flags().String("format", "ascii", "Output format: ascii|json")
 	reportTelemetryCmd.Flags().Int("limit", 10, "Number of recent runs to display")

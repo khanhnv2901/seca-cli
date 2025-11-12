@@ -56,7 +56,7 @@ var engagementCreateCmd = &cobra.Command{
 		list := loadEngagements()
 		list = append(list, e)
 		saveEngagements(list)
-		fmt.Printf("Created engagement %s (id=%s)\n", name, e.ID)
+		fmt.Printf("%s engagement %s (id=%s)\n", colorSuccess("Created"), name, e.ID)
 		return nil
 	},
 }
@@ -84,6 +84,60 @@ var engagementAddScopeCmd = &cobra.Command{
 	},
 }
 
+var engagementViewCmd = &cobra.Command{
+	Use:   "view",
+	Short: "Show a single engagement as JSON",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		id, _ := cmd.Flags().GetString("id")
+		if id == "" {
+			return fmt.Errorf("--id is required")
+		}
+
+		eng, err := findEngagementByID(id)
+		if err != nil {
+			return err
+		}
+
+		payload, err := json.MarshalIndent(eng, jsonPrefix, jsonIndent)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(string(payload))
+		return nil
+	},
+}
+
+var engagementDeleteCmd = &cobra.Command{
+	Use:   "delete",
+	Short: "Delete an engagement from tracking",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		id, _ := cmd.Flags().GetString("id")
+		if id == "" {
+			return fmt.Errorf("--id is required")
+		}
+
+		list := loadEngagements()
+		index := -1
+		for i := range list {
+			if list[i].ID == id {
+				index = i
+				break
+			}
+		}
+
+		if index == -1 {
+			return &EngagementNotFoundError{ID: id}
+		}
+
+		removed := list[index]
+		list = append(list[:index], list[index+1:]...)
+		saveEngagements(list)
+		fmt.Printf("%s engagement %s (%s) removed\n", colorWarn("Deleted"), removed.Name, removed.ID)
+		return nil
+	},
+}
+
 func init() {
 	engagementCreateCmd.Flags().String("name", "", "Engagement name")
 	engagementCreateCmd.Flags().String("owner", "", "Onwer/POC")
@@ -94,6 +148,10 @@ func init() {
 	engagementAddScopeCmd.Flags().String("id", "", "Engagement id")
 	engagementAddScopeCmd.Flags().StringSlice("scope", []string{}, "Scope entries (URLs/hosts)")
 	engagementCmd.AddCommand(engagementAddScopeCmd)
+	engagementViewCmd.Flags().String("id", "", "Engagement id")
+	engagementCmd.AddCommand(engagementViewCmd)
+	engagementDeleteCmd.Flags().String("id", "", "Engagement id")
+	engagementCmd.AddCommand(engagementDeleteCmd)
 }
 
 func loadEngagements() []Engagement {
@@ -140,6 +198,20 @@ func saveEngagements(list []Engagement) {
 	}
 }
 
+func findEngagementByID(id string) (*Engagement, error) {
+	if id == "" {
+		return nil, fmt.Errorf("--id is required")
+	}
+	list := loadEngagements()
+	for i := range list {
+		if list[i].ID == id {
+			eng := list[i]
+			return &eng, nil
+		}
+	}
+	return nil, &EngagementNotFoundError{ID: id}
+}
+
 var allowedScopeSchemes = map[string]struct{}{
 	"http":  {},
 	"https": {},
@@ -171,7 +243,7 @@ func addScopeEntries(id string, entries []string) error {
 		return &EngagementNotFoundError{ID: id}
 	}
 	saveEngagements(list)
-	fmt.Printf("Added scope %v to engagement %s\n", normalizedScope, id)
+	fmt.Printf("%s scope %v to engagement %s\n", colorSuccess("Added"), normalizedScope, id)
 	return nil
 }
 
