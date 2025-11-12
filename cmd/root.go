@@ -18,11 +18,6 @@ type AppContext struct {
 	ResultsDir string
 }
 
-// contextKey is a private type for context keys to avoid collisions
-type contextKey string
-
-const appContextKey contextKey = "appContext"
-
 var cfgFile string
 
 var rootCmd = &cobra.Command{
