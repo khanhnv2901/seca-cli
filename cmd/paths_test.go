@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/khanhnv2901/seca-cli/cmd/testutil"
+	consts "github.com/khanhnv2901/seca-cli/internal/constants"
 )
 
 func TestGetDataDir(t *testing.T) {
@@ -171,7 +172,7 @@ func TestDataDirCreation(t *testing.T) {
 
 	// Verify permissions (should be readable/writable)
 	testFile := filepath.Join(dataDir, "test_write.txt")
-	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(testFile, []byte("test"), consts.DefaultFilePerm); err != nil {
 		t.Errorf("Cannot write to data directory: %v", err)
 	} else {
 		_ = os.Remove(testFile) // Clean up

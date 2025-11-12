@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/khanhnv2901/seca-cli/cmd/testutil"
+	consts "github.com/khanhnv2901/seca-cli/internal/constants"
 )
 
 // Helper function to backup and restore engagements file
@@ -51,7 +52,7 @@ func TestLoadEngagements_ValidFile(t *testing.T) {
 
 	// Write test data
 	data, _ := json.MarshalIndent(testEngagements, jsonPrefix, jsonIndent)
-	if err := os.WriteFile(filePath, data, 0644); err != nil {
+	if err := os.WriteFile(filePath, data, consts.DefaultFilePerm); err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}
 

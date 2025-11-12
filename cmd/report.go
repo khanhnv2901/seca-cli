@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/khanhnv2901/seca-cli/internal/checker"
+	consts "github.com/khanhnv2901/seca-cli/internal/constants"
 	"github.com/spf13/cobra"
 )
 
@@ -84,7 +85,7 @@ var reportGenerateCmd = &cobra.Command{
 
 		// Write report to file
 		reportPath := filepath.Join(appCtx.ResultsDir, id, filename)
-		if err := os.WriteFile(reportPath, []byte(reportContent), 0644); err != nil {
+		if err := os.WriteFile(reportPath, []byte(reportContent), consts.DefaultFilePerm); err != nil {
 			return fmt.Errorf("failed to write report: %w", err)
 		}
 

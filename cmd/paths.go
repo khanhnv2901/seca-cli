@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+
+	consts "github.com/khanhnv2901/seca-cli/internal/constants"
 )
 
 // getDataDir returns the appropriate data directory for the current OS
@@ -48,7 +50,7 @@ func getDataDir() (string, error) {
 	}
 
 	// Create directory if it doesn't exist
-	if err := os.MkdirAll(baseDir, 0o755); err != nil {
+	if err := os.MkdirAll(baseDir, consts.DefaultDirPerm); err != nil {
 		return "", fmt.Errorf("failed to create data directory: %w", err)
 	}
 
@@ -96,7 +98,7 @@ func migrateEngagementsFile(oldPath, newPath string) error {
 	}
 
 	// Write to new location
-	if err := os.WriteFile(newPath, data, 0o644); err != nil {
+	if err := os.WriteFile(newPath, data, consts.DefaultFilePerm); err != nil {
 		return fmt.Errorf("failed to write to new location: %w", err)
 	}
 
@@ -123,7 +125,7 @@ func getResultsDir() (string, error) {
 	resultsDir := filepath.Join(dataDir, "results")
 
 	// Create directory if it doesn't exist
-	if err := os.MkdirAll(resultsDir, 0o755); err != nil {
+	if err := os.MkdirAll(resultsDir, consts.DefaultDirPerm); err != nil {
 		return "", fmt.Errorf("failed to create results directory: %w", err)
 	}
 

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	consts "github.com/khanhnv2901/seca-cli/internal/constants"
 	"go.uber.org/zap"
 )
 
@@ -47,7 +48,7 @@ func NewTestEnv(t *testing.T) *TestEnv {
 
 	// Create results directory structure
 	resultsDir := filepath.Join(tmpDir, "results")
-	if err := os.MkdirAll(filepath.Join(resultsDir, engagementID), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(resultsDir, engagementID), consts.DefaultDirPerm); err != nil {
 		t.Fatalf("Failed to create test results directory: %v", err)
 	}
 
@@ -67,7 +68,7 @@ func (e *TestEnv) WithEngagementID(id string) *TestEnv {
 	e.EngagementID = id
 
 	// Create directory for new engagement
-	if err := os.MkdirAll(filepath.Join(e.AppCtx.ResultsDir, id), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Join(e.AppCtx.ResultsDir, id), consts.DefaultDirPerm); err != nil {
 		e.t.Fatalf("Failed to create engagement directory: %v", err)
 	}
 
@@ -114,11 +115,11 @@ func (e *TestEnv) CreateFile(relativePath string, content []byte) string {
 	fullPath := filepath.Join(e.TmpDir, relativePath)
 	dir := filepath.Dir(fullPath)
 
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, consts.DefaultDirPerm); err != nil {
 		e.t.Fatalf("Failed to create directory %s: %v", dir, err)
 	}
 
-	if err := os.WriteFile(fullPath, content, 0644); err != nil {
+	if err := os.WriteFile(fullPath, content, consts.DefaultFilePerm); err != nil {
 		e.t.Fatalf("Failed to create file %s: %v", fullPath, err)
 	}
 
@@ -176,7 +177,7 @@ func SetupEngagementsFile(t *testing.T, getFilePath func() (string, error)) func
 	backupFile := filePath + ".test.backup"
 	if _, err := os.Stat(filePath); err == nil {
 		data, _ := os.ReadFile(filePath)
-		_ = os.WriteFile(backupFile, data, 0644)
+		_ = os.WriteFile(backupFile, data, consts.DefaultFilePerm)
 	}
 
 	// Remove existing file
@@ -187,7 +188,7 @@ func SetupEngagementsFile(t *testing.T, getFilePath func() (string, error)) func
 		// Restore backup if it existed
 		if _, err := os.Stat(backupFile); err == nil {
 			data, _ := os.ReadFile(backupFile)
-			_ = os.WriteFile(filePath, data, 0644)
+			_ = os.WriteFile(filePath, data, consts.DefaultFilePerm)
 			_ = os.Remove(backupFile)
 		} else {
 			// Just remove test file

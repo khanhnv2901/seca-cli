@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	consts "github.com/khanhnv2901/seca-cli/internal/constants"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -80,7 +81,7 @@ Documentation:
 		}
 
 		// create results dir if not exists
-		if err := os.MkdirAll(appCtx.ResultsDir, 0o755); err != nil {
+		if err := os.MkdirAll(appCtx.ResultsDir, consts.DefaultDirPerm); err != nil {
 			return fmt.Errorf("failed to create results directory: %s", err.Error())
 		}
 

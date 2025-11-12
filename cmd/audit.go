@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	consts "github.com/khanhnv2901/seca-cli/internal/constants"
 )
 
 // audit header fields:
@@ -30,7 +32,7 @@ var auditHeader = []string{
 func AppendAuditRow(resultsDir string, engagementID string, operatorName string, commandName string, target string, status string, httpStatus int, tlsExpiry string, notes string, errMsg string, durationSeconds float64) error {
 	// ensure engagement-specific directory under resultsDir
 	dir := filepath.Join(resultsDir, engagementID)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, consts.DefaultDirPerm); err != nil {
 		return fmt.Errorf("create results subdir failed: %w", err)
 	}
 
@@ -41,7 +43,7 @@ func AppendAuditRow(resultsDir string, engagementID string, operatorName string,
 		exists = false
 	}
 
-	f, err := os.OpenFile(auditPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	f, err := os.OpenFile(auditPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, consts.DefaultFilePerm)
 	if err != nil {
 		return fmt.Errorf("open audit file failed: %w", err)
 	}
@@ -90,7 +92,7 @@ func AppendAuditRow(resultsDir string, engagementID string, operatorName string,
 // SaveRawCapture writes a limited raw HTTP response for auditing (be careful with PII)
 func SaveRawCapture(resultsDir string, engamentID, target string, headers map[string][]string, bodySnippet string) error {
 	dir := filepath.Join(resultsDir, engamentID)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, consts.DefaultDirPerm); err != nil {
 		return err
 	}
 	filename := fmt.Sprintf("raw_%d.txt", time.Now().UnixNano())
@@ -105,7 +107,7 @@ func SaveRawCapture(resultsDir string, engamentID, target string, headers map[st
 	for k, v := range headers {
 		fmt.Fprintf(f, "%s: %s\n", k, v)
 	}
-	fmt.Fprintf(f, "\n--- Body Snippet (max 2048 bytes) ---\n%s\n", bodySnippet)
+	fmt.Fprintf(f, "\n--- Body Snippet (max %d bytes) ---\n%s\n", consts.RawCaptureLimitBytes, bodySnippet)
 	return nil
 }
 
@@ -125,7 +127,7 @@ func HashFileSHA256(path string) (string, error) {
 	sum := hex.EncodeToString(h.Sum(nil))
 	hashPath := path + ".sha256"
 	content := fmt.Sprintf("%s  %s\n", sum, filepath.Base(path))
-	if err := os.WriteFile(hashPath, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(hashPath, []byte(content), consts.DefaultFilePerm); err != nil {
 		return "", err
 	}
 	return sum, nil

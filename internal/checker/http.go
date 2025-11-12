@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	consts "github.com/khanhnv2901/seca-cli/internal/constants"
 )
 
 // HTTPChecker performs HTTP/HTTPS checks with TLS monitoring
@@ -83,7 +85,7 @@ func (h *HTTPChecker) Check(ctx context.Context, target string) CheckResult {
 			result.TLSExpiry = cert.NotAfter.Format(time.RFC3339)
 
 			// Warn if expiring within 14 days
-			if time.Until(cert.NotAfter) < (14 * 24 * time.Hour) {
+			if time.Until(cert.NotAfter) < consts.TLSSoonExpiryWindow {
 				if result.Notes != "" {
 					result.Notes += "; TLS certificate expires soon"
 				} else {
@@ -112,7 +114,7 @@ func (h *HTTPChecker) Check(ctx context.Context, target string) CheckResult {
 
 	// Optional raw response capture
 	if h.CaptureRaw && h.RawHandler != nil {
-		bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, int64(consts.RawCaptureLimitBytes)))
 		if err != nil {
 			// Log but don't fail - partial body is acceptable
 			if result.Notes != "" {

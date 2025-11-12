@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/khanhnv2901/seca-cli/internal/checker"
+	consts "github.com/khanhnv2901/seca-cli/internal/constants"
 	"github.com/spf13/cobra"
 )
 
@@ -225,7 +226,7 @@ func runCheckCommand(cmd *cobra.Command, config checkConfig) error {
 
 	startAll := time.Now()
 	dir := filepath.Join(appCtx.ResultsDir, params.ID)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, consts.DefaultDirPerm); err != nil {
 		return fmt.Errorf("failed to create results directory: %w", err)
 	}
 
@@ -344,7 +345,7 @@ func loadEngagementByID(id string) (*Engagement, error) {
 // writeResultsAndHash writes results to JSON file, computes hashes, and returns paths and hashes
 func writeResultsAndHash(appCtx *AppContext, id string, resultsFilename string, metadata RunMetadata, results []checker.CheckResult, startTime time.Time) (resultsPath, auditPath, auditHash, resultsHash string, err error) {
 	dir := filepath.Join(appCtx.ResultsDir, id)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, consts.DefaultDirPerm); err != nil {
 		return "", "", "", "", fmt.Errorf("failed to create results directory: %w", err)
 	}
 
@@ -364,7 +365,7 @@ func writeResultsAndHash(appCtx *AppContext, id string, resultsFilename string, 
 		return "", "", "", "", fmt.Errorf("failed to marshal results: %w", err)
 	}
 
-	if err := os.WriteFile(resultsPath, b, 0o644); err != nil {
+	if err := os.WriteFile(resultsPath, b, consts.DefaultFilePerm); err != nil {
 		return "", "", "", "", fmt.Errorf("failed to write results: %w", err)
 	}
 
@@ -382,7 +383,7 @@ func writeResultsAndHash(appCtx *AppContext, id string, resultsFilename string, 
 		return "", "", "", "", fmt.Errorf("failed to marshal final results: %w", err)
 	}
 
-	if err := os.WriteFile(resultsPath, b, 0o644); err != nil {
+	if err := os.WriteFile(resultsPath, b, consts.DefaultFilePerm); err != nil {
 		return "", "", "", "", fmt.Errorf("failed to write final results: %w", err)
 	}
 

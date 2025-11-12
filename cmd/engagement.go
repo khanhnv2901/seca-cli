@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	consts "github.com/khanhnv2901/seca-cli/internal/constants"
 	"github.com/spf13/cobra"
 )
 
@@ -149,7 +150,7 @@ func saveEngagements(list []Engagement) {
 		return
 	}
 
-	if err := os.WriteFile(filePath, b, 0644); err != nil {
+	if err := os.WriteFile(filePath, b, consts.DefaultFilePerm); err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing engagements file: %v\n", err)
 	}
 }
