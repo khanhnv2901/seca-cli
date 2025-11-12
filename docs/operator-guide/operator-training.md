@@ -495,8 +495,8 @@ seca engagement list
 ## Additional Resources
 
 - [README.md](README.md) - General documentation
-- [COMPLIANCE.md](COMPLIANCE.md) - Detailed compliance guide
-- [TESTING.md](TESTING.md) - Testing and validation
+- [Compliance Guide](../operator-guide/compliance.md) - Detailed compliance guide
+- [Testing Guide](../technical/testing.md) - Testing and validation
 - [Makefile](Makefile) - Automation commands
 
 ## Support

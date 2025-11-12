@@ -73,8 +73,10 @@ var infoCmd = &cobra.Command{
 		fmt.Fprintln(out)
 		fmt.Fprintln(out, "Documentation:")
 		fmt.Fprintln(out, "  README.md                    - Full documentation")
-		fmt.Fprintln(out, "  DATA_DIRECTORY_MIGRATION.md  - Migration guide")
-		fmt.Fprintln(out, "  COMPLIANCE.md                - Compliance guidelines")
+		fmt.Fprintln(out, "  docs/reference/data-migration.md  - Migration guide")
+		fmt.Fprintln(out, "  docs/operator-guide/compliance.md      - Compliance guidelines")
+	fmt.Fprintln(out, "  docs/README.md                         - Documentation index")
+	fmt.Fprintln(out, "  docs/user-guide/configuration.md       - Configuration guide")
 
 		return nil
 	},

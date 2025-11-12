@@ -37,9 +37,10 @@ You can override the data directory in ~/.seca-cli.yaml with:
   results_dir: /custom/path/to/results
 
 Documentation:
-  README.md                    - Full documentation
-  DATA_DIRECTORY_MIGRATION.md  - Data migration guide
-  COMPLIANCE.md                - Compliance guidelines
+  README.md                              - Full documentation
+  docs/reference/data-migration.md       - Data migration guide
+  docs/operator-guide/compliance.md      - Compliance guidelines
+  docs/user-guide/configuration.md       - Configuration guide
 `,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// init config

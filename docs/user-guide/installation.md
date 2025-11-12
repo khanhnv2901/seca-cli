@@ -213,7 +213,7 @@ VERSION=1.0.0 GIT_COMMIT=$(git rev-parse --short HEAD) ./scripts/build.sh
 When upgrading from versions prior to 0.2.0:
 - SECA-CLI automatically migrates `engagements.json` from the project directory on first run
 - The old file is backed up as `engagements.json.backup`
-- See [DATA_DIRECTORY_MIGRATION.md](DATA_DIRECTORY_MIGRATION.md) for details
+- See [Data Migration Guide](../reference/data-migration.md) for details
 
 ### Global Configuration File
 
@@ -515,12 +515,12 @@ go build -v main.go
 1. **Read Documentation**
    ```bash
    cat README.md
-   cat COMPLIANCE.md
+   cat docs/operator-guide/compliance.md
    ```
 
 2. **Complete Operator Training**
    ```bash
-   cat OPERATOR_TRAINING.md
+   cat docs/operator-guide/operator-training.md
    ```
 
 3. **Run Integration Tests**
@@ -561,7 +561,7 @@ go build -v main.go
 
 ### Getting Help
 
-- **Documentation**: Check README.md, COMPLIANCE.md, TESTING.md
+- **Documentation**: Check [README.md](../../README.md), [Compliance Guide](../operator-guide/compliance.md), [Testing Guide](../technical/testing.md)
 - **Issues**: https://github.com/khanhnv2901/seca-cli/issues
 - **Email**: khanhnv2901@gmail.com
 

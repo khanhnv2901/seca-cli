@@ -132,9 +132,9 @@ gh release create v1.0.0 \
 ### Step 1: Provide Documentation
 
 Send operators:
-1. [INSTALL.md](INSTALL.md) - Installation instructions
-2. [OPERATOR_TRAINING.md](OPERATOR_TRAINING.md) - Training guide
-3. [COMPLIANCE.md](COMPLIANCE.md) - Compliance requirements
+1. [Installation Guide](../user-guide/installation.md) - Installation instructions
+2. [Operator Training Guide](../operator-guide/operator-training.md) - Training guide
+3. [Compliance Guide](../operator-guide/compliance.md) - Compliance requirements
 4. [README.md](README.md) - General documentation
 
 ### Step 2: Training Session

@@ -232,8 +232,10 @@ func TestInfoCommand_ShowsDocumentation(t *testing.T) {
 	// Verify documentation references
 	expectedDocs := []string{
 		"README.md",
-		"DATA_DIRECTORY_MIGRATION.md",
-		"COMPLIANCE.md",
+		"docs/README.md",
+		"docs/reference/data-migration.md",
+		"docs/operator-guide/compliance.md",
+		"docs/user-guide/configuration.md",
 	}
 
 	for _, doc := range expectedDocs {

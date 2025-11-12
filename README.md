@@ -76,7 +76,7 @@ This is useful for:
 - Network storage
 - Custom backup solutions
 
-See [DATA_DIRECTORY_MIGRATION.md](DATA_DIRECTORY_MIGRATION.md) for detailed migration instructions.
+See [Data Migration Guide](docs/reference/data-migration.md) for detailed migration instructions.
 
 ## Quick Start
 
@@ -335,7 +335,7 @@ This creates:
 
 ## Configuration
 
-SECA-CLI uses OS-appropriate data directories by default. You can customize the configuration by creating `~/.seca-cli.yaml`:
+SECA-CLI uses OS-appropriate data directories by default. You can customize settings by creating `~/.seca-cli.yaml`:
 
 ```yaml
 # Optional: Override default data directory
@@ -359,6 +359,8 @@ seca --config /path/to/config.yaml engagement list
 - **macOS:** `~/Library/Application Support/seca-cli/`
 - **Windows:** `%LOCALAPPDATA%\seca-cli\`
 
+For complete configuration options including command-line flags, environment variables, and examples, see [Configuration Guide](docs/user-guide/configuration.md).
+
 ## Testing
 
 SECA-CLI includes comprehensive unit and integration tests.
@@ -379,7 +381,7 @@ make test-integration
 make test-all
 ```
 
-See [TESTING.md](TESTING.md) for detailed testing documentation.
+See [Testing Guide](docs/technical/testing.md) for detailed testing documentation.
 
 ## Makefile Targets
 
@@ -590,7 +592,7 @@ SECA-CLI is designed to support compliance with:
 - **SOC 2** - Chain of custody, cryptographic hashing, operator attribution
 - **ISO 27001** - Documentation, access controls, change tracking
 
-See [COMPLIANCE.md](COMPLIANCE.md) for detailed compliance guidance.
+See [Compliance Guide](docs/operator-guide/compliance.md) for detailed compliance guidance.
 
 ## Examples
 
@@ -726,7 +728,7 @@ VERSION=1.2.0 make build
 ./seca --help
 ```
 
-For detailed information about version management and build options, see [VERSION.md](VERSION.md).
+For detailed information about version management and build options, see [Version Management Guide](docs/technical/version-management.md).
 
 ## Contributing
 

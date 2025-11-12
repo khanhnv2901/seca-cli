@@ -1,7 +1,91 @@
-default_rate: 2
-default_concurrency: 2
-timeout: 10
-report_dir: ./reports
-results_dir: ./results
-logging:
-  level: info
+# SECA-CLI Configuration File
+#
+# Location: ~/.seca-cli.yaml
+# Or specify: seca --config /path/to/config.yaml
+#
+# All settings are OPTIONAL with sensible defaults.
+# Command-line flags ALWAYS override these settings.
+
+# ============================================================================
+# Data Storage
+# ============================================================================
+
+# Custom results directory path
+#
+# Default OS-appropriate locations:
+#   Linux/Unix:  ~/.local/share/seca-cli/results/
+#   macOS:       ~/Library/Application Support/seca-cli/results/
+#   Windows:     %LOCALAPPDATA%\seca-cli\results\
+#
+# Use cases:
+#   - Shared team directories
+#   - Network storage
+#   - Custom backup locations
+#
+# Examples:
+#   results_dir: /opt/security/seca-results
+#   results_dir: /mnt/shared/team-engagements
+#   results_dir: ~/Documents/security-testing
+#
+results_dir: ""
+
+# ============================================================================
+# Example Configurations
+# ============================================================================
+
+# Single User:
+# ----------------------------------------------------------------------------
+# results_dir: ~/security-testing
+
+# Team (Shared Storage):
+# ----------------------------------------------------------------------------
+# results_dir: /mnt/shared/security-engagements
+
+# High Security (Encrypted Volume):
+# ----------------------------------------------------------------------------
+# results_dir: /secure/compliance-audits
+
+# ============================================================================
+# Note on Other Settings
+# ============================================================================
+
+# Currently, only `results_dir` is configurable via this file.
+# Other settings must be specified via command-line flags:
+#
+# Operator Identity:
+#   --operator "John Doe"
+#   or set USER/LOGNAME environment variable
+#
+# Check Settings (per-command flags):
+#   --concurrency 5        # Simultaneous requests
+#   --rate 10              # Requests per second
+#   --timeout 30           # Request timeout (seconds)
+#
+# DNS Settings (per-command flags):
+#   --nameservers "8.8.8.8:53,1.1.1.1:53"
+#   --dns-timeout 10
+#
+# Compliance Settings (per-command flags):
+#   --compliance-mode      # Enable compliance enforcement
+#   --retention-days 90    # Raw capture retention period
+#   --auto-sign            # Automatic GPG signing
+#   --gpg-key "security@example.com"
+#   --audit-append-raw     # Save raw HTTP responses
+#
+# See documentation:
+#   seca check http --help
+#   seca check dns --help
+
+# ============================================================================
+# Verification
+# ============================================================================
+
+# Test your configuration:
+#   1. Check settings:    seca info
+#   2. Create engagement: seca engagement create --name "Test" ...
+#   3. Verify in logs
+
+# For more information:
+#   - README.md - Complete documentation
+#   - COMPLIANCE.md - Compliance guidelines
+#   - DATA_DIRECTORY_MIGRATION.md - Data storage details
