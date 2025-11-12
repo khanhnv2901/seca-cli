@@ -92,7 +92,7 @@ func TestGenerateMarkdownReport(t *testing.T) {
 		},
 	}
 
-	report, err := generateMarkdownReport(output)
+	report, err := generateMarkdownReport(buildTemplateData(output, "%.2f", nil))
 	if err != nil {
 		t.Fatalf("Failed to generate Markdown report: %v", err)
 	}
@@ -177,7 +177,7 @@ func TestGenerateHTMLReport(t *testing.T) {
 		},
 	}
 
-	report, err := generateHTMLReport(output)
+	report, err := generateHTMLReport(buildTemplateData(output, "%.1f", nil))
 	if err != nil {
 		t.Fatalf("Failed to generate HTML report: %v", err)
 	}
@@ -276,7 +276,7 @@ func TestGenerateMarkdownReport_EmptyResults(t *testing.T) {
 		Results: []checker.CheckResult{},
 	}
 
-	report, err := generateMarkdownReport(output)
+	report, err := generateMarkdownReport(buildTemplateData(output, "%.2f", nil))
 	if err != nil {
 		t.Fatalf("Failed to generate markdown report for empty results: %v", err)
 	}
@@ -304,7 +304,7 @@ func TestGenerateHTMLReport_EmptyResults(t *testing.T) {
 		Results: []checker.CheckResult{},
 	}
 
-	report, err := generateHTMLReport(output)
+	report, err := generateHTMLReport(buildTemplateData(output, "%.1f", nil))
 	if err != nil {
 		t.Fatalf("Failed to generate HTML report for empty results: %v", err)
 	}
@@ -341,7 +341,7 @@ func TestGenerateMarkdownReport_SummaryStatistics(t *testing.T) {
 		},
 	}
 
-	report, err := generateMarkdownReport(output)
+	report, err := generateMarkdownReport(buildTemplateData(output, "%.2f", nil))
 	if err != nil {
 		t.Fatalf("Failed to generate markdown report: %v", err)
 	}
@@ -379,7 +379,7 @@ func TestGenerateHTMLReport_SummaryStatistics(t *testing.T) {
 		},
 	}
 
-	report, err := generateHTMLReport(output)
+	report, err := generateHTMLReport(buildTemplateData(output, "%.1f", nil))
 	if err != nil {
 		t.Fatalf("Failed to generate HTML report: %v", err)
 	}
@@ -417,7 +417,7 @@ func TestGenerateMarkdownReport_DurationCalculation(t *testing.T) {
 		},
 	}
 
-	report, err := generateMarkdownReport(output)
+	report, err := generateMarkdownReport(buildTemplateData(output, "%.2f", nil))
 	if err != nil {
 		t.Fatalf("Failed to generate markdown report: %v", err)
 	}
@@ -448,7 +448,7 @@ func TestGenerateHTMLReport_SpecialCharactersEscaping(t *testing.T) {
 		},
 	}
 
-	report, err := generateHTMLReport(output)
+	report, err := generateHTMLReport(buildTemplateData(output, "%.1f", nil))
 	if err != nil {
 		t.Fatalf("Failed to generate HTML report: %v", err)
 	}
@@ -476,7 +476,7 @@ func TestGenerateMarkdownReport_OptionalFields(t *testing.T) {
 			{
 				Target:       "https://example.com",
 				Status:       "ok",
-				HTTPStatus:   0, // No HTTP status
+				HTTPStatus:   0,  // No HTTP status
 				ServerHeader: "", // No server header
 				TLSExpiry:    "", // No TLS expiry
 				Notes:        "", // No notes
@@ -485,7 +485,7 @@ func TestGenerateMarkdownReport_OptionalFields(t *testing.T) {
 		},
 	}
 
-	report, err := generateMarkdownReport(output)
+	report, err := generateMarkdownReport(buildTemplateData(output, "%.2f", nil))
 	if err != nil {
 		t.Fatalf("Failed to generate markdown report: %v", err)
 	}

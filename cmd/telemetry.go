@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -11,7 +12,7 @@ import (
 	consts "github.com/khanhnv2901/seca-cli/internal/constants"
 )
 
-type telemetryRecord struct {
+type TelemetryRecord struct {
 	Timestamp           time.Time `json:"timestamp"`
 	Command             string    `json:"command"`
 	EngagementID        string    `json:"engagement_id"`
@@ -37,7 +38,7 @@ func recordTelemetry(appCtx *AppContext, engagementID string, command string, re
 		avgDuration = duration.Seconds() / float64(total)
 	}
 
-	record := telemetryRecord{
+	record := TelemetryRecord{
 		Timestamp:           time.Now().UTC(),
 		Command:             command,
 		EngagementID:        engagementID,
@@ -77,4 +78,40 @@ func summarizeStatuses(results []checker.CheckResult) (okCount, errorCount int) 
 		}
 	}
 	return okCount, errorCount
+}
+
+func loadTelemetryHistory(resultsDir, engagementID string, limit int) ([]TelemetryRecord, error) {
+	if limit <= 0 {
+		limit = 5
+	}
+
+	telemetryPath := filepath.Join(resultsDir, "telemetry.jsonl")
+	f, err := os.Open(telemetryPath)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	records := make([]TelemetryRecord, 0, limit)
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		var rec TelemetryRecord
+		if err := json.Unmarshal(scanner.Bytes(), &rec); err != nil {
+			continue
+		}
+		if rec.EngagementID != engagementID {
+			continue
+		}
+		records = append(records, rec)
+	}
+
+	// Keep only most recent limit entries
+	if len(records) > limit {
+		records = records[len(records)-limit:]
+	}
+
+	return records, scanner.Err()
 }

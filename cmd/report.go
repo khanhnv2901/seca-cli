@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -39,6 +40,9 @@ var (
 		"add":                 addInts,
 		"join":                strings.Join,
 		"headersPresentCount": headersPresentCount,
+		"formatTime":          formatShortTimestamp,
+		"formatDuration":      formatDurationLabel,
+		"formatSuccess":       formatSuccessRate,
 	}
 
 	markdownTemplateFuncs = template.FuncMap{
@@ -48,6 +52,9 @@ var (
 		"highSeverityMissing":    missingHighSeverityHeaders,
 		"mediumSeverityMissing":  missingMediumSeverityHeaders,
 		"hasHighSeverityMissing": hasCriticalMissingHeaders,
+		"formatTime":             formatShortTimestamp,
+		"formatDuration":         formatDurationLabel,
+		"formatSuccess":          formatSuccessRate,
 	}
 
 	htmlReportTemplate = template.Must(
@@ -79,8 +86,8 @@ var reportGenerateCmd = &cobra.Command{
 
 		// Validate format
 		format = strings.ToLower(format)
-		if format != "json" && format != "md" && format != "html" {
-			return fmt.Errorf("invalid format: %s (must be json, md, or html)", format)
+		if format != "json" && format != "md" && format != "html" && format != "pdf" {
+			return fmt.Errorf("invalid format: %s (must be json, md, html, or pdf)", format)
 		}
 
 		// Read results from results directory
@@ -104,16 +111,38 @@ var reportGenerateCmd = &cobra.Command{
 		var reportContent string
 		var filename string
 
+		trendHistory, histErr := loadTelemetryHistory(appCtx.ResultsDir, output.Metadata.EngagementID, 8)
+		if histErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to load telemetry history: %v\n", histErr)
+		}
+
 		switch format {
 		case "json":
 			reportContent, err = generateJSONReport(&output)
 			filename = "report.json"
 		case "md":
-			reportContent, err = generateMarkdownReport(&output)
+			data := buildTemplateData(&output, "%.2f", trendHistory)
+			reportContent, err = generateMarkdownReport(data)
 			filename = "report.md"
 		case "html":
-			reportContent, err = generateHTMLReport(&output)
+			data := buildTemplateData(&output, "%.1f", trendHistory)
+			reportContent, err = generateHTMLReport(data)
 			filename = "report.html"
+		case "pdf":
+			data := buildTemplateData(&output, "%.1f", trendHistory)
+			pdfBytes, perr := generatePDFReportBytes(data)
+			if perr != nil {
+				return fmt.Errorf("failed to generate PDF report: %w", perr)
+			}
+			filename = "report.pdf"
+			reportPath := filepath.Join(appCtx.ResultsDir, id, filename)
+			if err := os.WriteFile(reportPath, pdfBytes, consts.DefaultFilePerm); err != nil {
+				return fmt.Errorf("failed to write report: %w", err)
+			}
+			fmt.Printf("Report generated: %s\n", reportPath)
+			fmt.Printf("Format: %s\n", format)
+			fmt.Printf("Total targets: %d\n", output.Metadata.TotalTargets)
+			return nil
 		}
 
 		if err != nil {
@@ -142,12 +171,11 @@ func generateJSONReport(output *RunOutput) (string, error) {
 	return string(data), nil
 }
 
-func generateMarkdownReport(output *RunOutput) (string, error) {
-	data := buildTemplateData(output, "%.2f")
+func generateMarkdownReport(data TemplateData) (string, error) {
 	return executeTemplate(markdownReportTemplate, data)
 }
 
-// TemplateData holds the data for HTML template rendering
+// TemplateData holds the data for HTML/PDF/Markdown template rendering
 type TemplateData struct {
 	Metadata     RunMetadata
 	Results      []checker.CheckResult
@@ -159,10 +187,16 @@ type TemplateData struct {
 	ErrorCount   int
 	SuccessRate  string
 	FooterDate   string
+	TrendHistory []TelemetryRecord
+	TrendSummary TrendSummary
 }
 
-func generateHTMLReport(output *RunOutput) (string, error) {
-	data := buildTemplateData(output, "%.1f")
+type TrendSummary struct {
+	AverageSuccess  float64
+	AverageDuration float64
+}
+
+func generateHTMLReport(data TemplateData) (string, error) {
 	return executeTemplate(htmlReportTemplate, data)
 }
 
@@ -224,7 +258,121 @@ func hasCriticalMissingHeaders(sh *checker.SecurityHeadersResult) bool {
 	return false
 }
 
-func buildTemplateData(output *RunOutput, successRateFmt string) TemplateData {
+func formatShortTimestamp(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.Format("Jan 02 15:04")
+}
+
+func formatDurationLabel(seconds float64) string {
+	if seconds <= 0 {
+		return "0s"
+	}
+	if seconds < 60 {
+		return fmt.Sprintf("%.1fs", seconds)
+	}
+	min := seconds / 60
+	return fmt.Sprintf("%.1f min", min)
+}
+
+func formatSuccessRate(rate float64) string {
+	return fmt.Sprintf("%.1f%%", rate)
+}
+
+func generatePDFReportBytes(data TemplateData) ([]byte, error) {
+	lines := buildPDFLines(data)
+	var contentBuilder strings.Builder
+	contentBuilder.WriteString("BT\n/F1 12 Tf\n72 750 Td\n")
+	firstLine := true
+	for _, line := range lines {
+		escaped := pdfEscape(line)
+		if firstLine {
+			contentBuilder.WriteString(fmt.Sprintf("(%s) Tj\n", escaped))
+			firstLine = false
+			continue
+		}
+		contentBuilder.WriteString("T*\n")
+		contentBuilder.WriteString(fmt.Sprintf("(%s) Tj\n", escaped))
+	}
+	contentBuilder.WriteString("ET\n")
+	content := contentBuilder.String()
+	contentLen := len(content)
+
+	var buf bytes.Buffer
+	buf.WriteString("%PDF-1.4\n")
+
+	offsets := make([]int, 6)
+	writeObj := func(idx int, obj string) {
+		offsets[idx] = buf.Len()
+		buf.WriteString(obj)
+		if !strings.HasSuffix(obj, "\n") {
+			buf.WriteString("\n")
+		}
+	}
+
+	writeObj(1, "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj")
+	writeObj(2, "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj")
+	writeObj(3, "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj")
+	writeObj(4, fmt.Sprintf("4 0 obj << /Length %d >> stream\n%sendstream\nendobj", contentLen, content))
+	writeObj(5, "5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj")
+
+	xrefStart := buf.Len()
+	buf.WriteString("xref\n0 6\n0000000000 65535 f \n")
+	for i := 1; i <= 5; i++ {
+		buf.WriteString(fmt.Sprintf("%010d 00000 n \n", offsets[i]))
+	}
+	buf.WriteString("trailer << /Size 6 /Root 1 0 R >>\n")
+	buf.WriteString(fmt.Sprintf("startxref\n%d\n%%%%EOF\n", xrefStart))
+
+	return buf.Bytes(), nil
+}
+
+func buildPDFLines(data TemplateData) []string {
+	lines := []string{
+		fmt.Sprintf("Engagement Report: %s", data.Metadata.EngagementName),
+		fmt.Sprintf("Engagement ID: %s", data.Metadata.EngagementID),
+		fmt.Sprintf("Operator: %s", data.Metadata.Operator),
+		fmt.Sprintf("Started: %s", data.StartedAt),
+		fmt.Sprintf("Completed: %s", data.CompletedAt),
+		"",
+		fmt.Sprintf("Summary: %d OK / %d Errors (Success %s)", data.SuccessCount, data.ErrorCount, data.SuccessRate),
+	}
+
+	if len(data.TrendHistory) > 0 {
+		lines = append(lines, "", "Trend Analysis:")
+		lines = append(lines, fmt.Sprintf("Average Success: %.1f%%", data.TrendSummary.AverageSuccess))
+		lines = append(lines, fmt.Sprintf("Average Duration: %s", formatDurationLabel(data.TrendSummary.AverageDuration)))
+		for _, rec := range data.TrendHistory {
+			lines = append(lines, fmt.Sprintf("%s -> %s success, %s", formatShortTimestamp(rec.Timestamp), formatSuccessRate(rec.SuccessRate), formatDurationLabel(rec.DurationSeconds)))
+		}
+	}
+
+	lines = append(lines, "", "Results:")
+	maxResults := 25
+	for i, r := range data.Results {
+		if i == maxResults {
+			lines = append(lines, fmt.Sprintf("... %d additional targets omitted ...", len(data.Results)-maxResults))
+			break
+		}
+		notes := strings.TrimSpace(r.Notes)
+		if notes == "" {
+			notes = "No notes"
+		}
+		lines = append(lines, fmt.Sprintf("%s - %s (%s)", r.Target, strings.ToUpper(r.Status), notes))
+	}
+
+	return lines
+}
+
+func pdfEscape(line string) string {
+	line = strings.ReplaceAll(line, "\\", "\\\\")
+	line = strings.ReplaceAll(line, "(", "\\(")
+	line = strings.ReplaceAll(line, ")", "\\)")
+	return line
+}
+
+func buildTemplateData(output *RunOutput, successRateFmt string, trends []TelemetryRecord) TemplateData {
 	okCount, errorCount := summarizeResults(output.Results)
 	total := len(output.Results)
 	successRate := 0.0
@@ -249,6 +397,8 @@ func buildTemplateData(output *RunOutput, successRateFmt string) TemplateData {
 		ErrorCount:   errorCount,
 		SuccessRate:  fmt.Sprintf(successRateFmt, successRate),
 		FooterDate:   now.Format("2006-01-02 15:04:05"),
+		TrendHistory: trends,
+		TrendSummary: summarizeTrendHistory(trends),
 	}
 }
 
@@ -261,6 +411,23 @@ func summarizeResults(results []checker.CheckResult) (okCount, errorCount int) {
 		}
 	}
 	return okCount, errorCount
+}
+
+func summarizeTrendHistory(trends []TelemetryRecord) TrendSummary {
+	if len(trends) == 0 {
+		return TrendSummary{}
+	}
+	sumSuccess := 0.0
+	sumDuration := 0.0
+	for _, rec := range trends {
+		sumSuccess += rec.SuccessRate
+		sumDuration += rec.DurationSeconds
+	}
+	count := float64(len(trends))
+	return TrendSummary{
+		AverageSuccess:  sumSuccess / count,
+		AverageDuration: sumDuration / count,
+	}
 }
 
 func executeTemplate(tmpl *template.Template, data TemplateData) (string, error) {
@@ -311,7 +478,7 @@ var reportStatsCmd = &cobra.Command{
 
 func init() {
 	reportGenerateCmd.Flags().String("id", "", "Engagement ID")
-	reportGenerateCmd.Flags().String("format", "md", "Output format: json|md|html")
+	reportGenerateCmd.Flags().String("format", "md", "Output format: json|md|html|pdf")
 	reportStatsCmd.Flags().String("id", "", "Engagement ID")
 	reportCmd.AddCommand(reportGenerateCmd)
 	reportCmd.AddCommand(reportStatsCmd)

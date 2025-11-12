@@ -194,6 +194,37 @@ tr:hover {
     margin: 10px 0;
     border-radius: 3px;
 }
+.trend-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    height: 200px;
+    margin: 20px 0 40px 0;
+}
+.trend-bar {
+    flex: 1;
+    min-width: 40px;
+    background-color: #3498db;
+    border-radius: 4px 4px 0 0;
+    position: relative;
+}
+.trend-value {
+    position: absolute;
+    top: -24px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.8em;
+    font-weight: bold;
+}
+.trend-label {
+    position: absolute;
+    bottom: -35px;
+    left: -20px;
+    width: 80px;
+    transform: rotate(-45deg);
+    font-size: 0.75em;
+    color: #555;
+}
 ul {
     margin: 10px 0;
     padding-left: 25px;
@@ -234,6 +265,37 @@ li {
         <div class="metadata-item"><span class="metadata-label">Audit Hash (SHA256):</span> <span class="code">{{.Metadata.AuditHash}}</span></div>
         {{end}}
     </div>
+
+    {{if .TrendHistory}}
+    <div class="section">
+        <h2>Trend Analysis</h2>
+        <p>Average Success Rate: <strong>{{formatSuccess .TrendSummary.AverageSuccess}}</strong> · Average Duration: <strong>{{formatDuration .TrendSummary.AverageDuration}}</strong></p>
+        <div class="trend-chart">
+            {{range .TrendHistory}}
+            <div class="trend-bar" style="height: {{printf "%.0f" .SuccessRate}}%">
+                <span class="trend-value">{{formatSuccess .SuccessRate}}</span>
+                <span class="trend-label">{{formatTime .Timestamp}}</span>
+            </div>
+            {{end}}
+        </div>
+        <table>
+            <tr>
+                <th>Run Time</th>
+                <th>Success Rate</th>
+                <th>Duration</th>
+                <th>Command</th>
+            </tr>
+            {{range .TrendHistory}}
+            <tr>
+                <td>{{formatTime .Timestamp}}</td>
+                <td>{{formatSuccess .SuccessRate}}</td>
+                <td>{{formatDuration .DurationSeconds}}</td>
+                <td>{{.Command}}</td>
+            </tr>
+            {{end}}
+        </table>
+    </div>
+    {{end}}
 
     <h2>Summary</h2>
     <div class="summary">

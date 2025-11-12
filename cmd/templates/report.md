@@ -21,6 +21,18 @@
 - **Failed:** {{.ErrorCount}}
 - **Success Rate:** {{.SuccessRate}}%
 
+{{if .TrendHistory}}## Trend Analysis
+
+- **Average Success Rate:** {{formatSuccess .TrendSummary.AverageSuccess}}
+- **Average Duration:** {{formatDuration .TrendSummary.AverageDuration}}
+
+| Run Time | Success Rate | Duration | Command |
+|----------|--------------|----------|---------|
+{{range .TrendHistory}}| {{formatTime .Timestamp}} | {{formatSuccess .SuccessRate}} | {{formatDuration .DurationSeconds}} | {{.Command}} |
+{{end}}
+
+{{end}}
+
 ## Results Overview
 
 | Target | Status | HTTP Status | Server | TLS Expiry | Notes |
