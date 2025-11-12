@@ -432,25 +432,29 @@ func printComplianceSummary(appCtx *AppContext, eng *Engagement, auditHash, resu
 	fmt.Println("------------------------------------------------------")
 }
 
+// addCommonCheckFlags adds flags that are common to all check commands.
+// This reduces duplication and ensures consistent flag definitions across commands.
+func addCommonCheckFlags(cmd *cobra.Command) {
+	cmd.Flags().String("id", "", "Engagement id")
+	cmd.Flags().Bool("roe-confirm", false, "Confirm you have explicit written authorization (required)")
+	cmd.Flags().Bool("compliance-mode", false, "Enable compliance enforcement (hashing, retention checks)")
+	cmd.Flags().Bool("auto-sign", false, "Automatically sign .sha256 files using configured GPG key")
+	cmd.Flags().String("gpg-key", "", "GPG key ID or email for signing (required if --auto-sign)")
+}
+
 func init() {
+	// Global check flags (apply to all subcommands)
 	checkCmd.PersistentFlags().IntVarP(&concurrency, "concurrency", "c", 1, "max concurrent requests")
 	checkCmd.PersistentFlags().IntVarP(&rateLimit, "rate", "r", 1, "requests per second (global)")
 	checkCmd.PersistentFlags().IntVarP(&timeoutSecs, "timeout", "t", 10, "request timeout in seconds")
-	// HTTP command flags
-	checkHTTPCmd.Flags().String("id", "", "Engagement id")
-	checkHTTPCmd.Flags().Bool("roe-confirm", false, "Confirm you have explicit written authorization (required)")
-	checkHTTPCmd.Flags().BoolVar(&auditAppendRaw, "audit-append-raw", false, "Save limited raw headers/body for auditing (handle carefully)")
-	checkHTTPCmd.Flags().BoolVar(&complianceMode, "compliance-mode", false, "Enable compliance enforcement (hashing, retention checks)")
-	checkHTTPCmd.Flags().IntVar(&retentionDays, "retention-days", 0, "Retention period (days) for raw captures; required in compliance mode if --audit-append-raw is used")
-	checkHTTPCmd.Flags().Bool("auto-sign", false, "Automatically sign .sha256 files using configured GPG key")
-	checkHTTPCmd.Flags().String("gpg-key", "", "GPG key ID or email for signing (required if --auto-sign)")
 
-	// DNS command flags
-	checkDNSCmd.Flags().String("id", "", "Engagement id")
-	checkDNSCmd.Flags().Bool("roe-confirm", false, "Confirm you have explicit written authorization (required)")
-	checkDNSCmd.Flags().Bool("compliance-mode", false, "Enable compliance enforcement (hashing, retention checks)")
-	checkDNSCmd.Flags().Bool("auto-sign", false, "Automatically sign .sha256 files using configured GPG key")
-	checkDNSCmd.Flags().String("gpg-key", "", "GPG key ID or email for signing (required if --auto-sign)")
+	// HTTP-specific flags
+	addCommonCheckFlags(checkHTTPCmd)
+	checkHTTPCmd.Flags().BoolVar(&auditAppendRaw, "audit-append-raw", false, "Save limited raw headers/body for auditing (handle carefully)")
+	checkHTTPCmd.Flags().IntVar(&retentionDays, "retention-days", 0, "Retention period (days) for raw captures; required in compliance mode if --audit-append-raw is used")
+
+	// DNS-specific flags
+	addCommonCheckFlags(checkDNSCmd)
 	checkDNSCmd.Flags().StringSliceVar(&dnsNameservers, "nameservers", []string{}, "Custom DNS nameservers (e.g., 8.8.8.8:53,1.1.1.1:53)")
 	checkDNSCmd.Flags().IntVar(&dnsTimeout, "dns-timeout", 10, "DNS query timeout in seconds")
 
