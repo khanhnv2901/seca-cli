@@ -5,40 +5,14 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/khanhnv2901/seca-cli/cmd/testutil"
 )
 
 // Helper function to backup and restore engagements file
+// Note: This uses testutil.SetupEngagementsFile internally
 func setupTestEngagements(t *testing.T) func() {
-	t.Helper()
-
-	// Get the actual file path
-	filePath, err := getEngagementsFilePath()
-	if err != nil {
-		t.Fatalf("Failed to get engagements file path: %v", err)
-	}
-
-	// Backup existing file if it exists
-	backupFile := filePath + ".test.backup"
-	if _, err := os.Stat(filePath); err == nil {
-		data, _ := os.ReadFile(filePath)
-		_ = os.WriteFile(backupFile, data, 0644)
-	}
-
-	// Remove existing file
-	os.Remove(filePath)
-
-	// Return cleanup function
-	return func() {
-		// Restore backup if it existed
-		if _, err := os.Stat(backupFile); err == nil {
-			data, _ := os.ReadFile(backupFile)
-			_ = os.WriteFile(filePath, data, 0644)
-			_ = os.Remove(backupFile)
-		} else {
-			// Just remove test file
-			_ = os.Remove(filePath)
-		}
-	}
+	return testutil.SetupEngagementsFile(t, getEngagementsFilePath)
 }
 
 func TestLoadEngagements_EmptyFile(t *testing.T) {

@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/khanhnv2901/seca-cli/cmd/testutil"
 )
 
 func TestGetDataDir(t *testing.T) {
@@ -89,17 +91,15 @@ func TestGetResultsDir(t *testing.T) {
 }
 
 func TestMigrateEngagementsFile(t *testing.T) {
-	// Create temp directory for testing
-	tmpDir := t.TempDir()
+	env := testutil.NewTestEnv(t)
+	defer env.Cleanup()
 
-	oldPath := filepath.Join(tmpDir, "old_engagements.json")
-	newPath := filepath.Join(tmpDir, "new_engagements.json")
+	oldPath := filepath.Join(env.TmpDir, "old_engagements.json")
+	newPath := filepath.Join(env.TmpDir, "new_engagements.json")
 
 	// Create old file with test data
 	testData := []byte(`[{"id":"123","name":"Test"}]`)
-	if err := os.WriteFile(oldPath, testData, 0644); err != nil {
-		t.Fatalf("Failed to create test file: %v", err)
-	}
+	env.CreateFile("old_engagements.json", testData)
 
 	// Migrate
 	if err := migrateEngagementsFile(oldPath, newPath); err != nil {
@@ -107,16 +107,10 @@ func TestMigrateEngagementsFile(t *testing.T) {
 	}
 
 	// Verify new file exists
-	if _, err := os.Stat(newPath); os.IsNotExist(err) {
-		t.Error("New file was not created")
-	}
+	env.MustExist("new_engagements.json")
 
 	// Verify content
-	newData, err := os.ReadFile(newPath)
-	if err != nil {
-		t.Fatalf("Failed to read new file: %v", err)
-	}
-
+	newData := env.ReadFile("new_engagements.json")
 	if string(newData) != string(testData) {
 		t.Errorf("Data mismatch: expected %s, got %s", testData, newData)
 	}
@@ -132,10 +126,11 @@ func TestMigrateEngagementsFile(t *testing.T) {
 }
 
 func TestMigrateEngagementsFile_NonExistent(t *testing.T) {
-	tmpDir := t.TempDir()
+	env := testutil.NewTestEnv(t)
+	defer env.Cleanup()
 
-	oldPath := filepath.Join(tmpDir, "nonexistent.json")
-	newPath := filepath.Join(tmpDir, "new.json")
+	oldPath := filepath.Join(env.TmpDir, "nonexistent.json")
+	newPath := filepath.Join(env.TmpDir, "new.json")
 
 	// Try to migrate non-existent file
 	err := migrateEngagementsFile(oldPath, newPath)

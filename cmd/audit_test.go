@@ -6,24 +6,19 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/khanhnv2901/seca-cli/cmd/testutil"
 )
 
 func TestAppendAuditRow(t *testing.T) {
-	// Setup temporary results directory
-	tmpDir := "test_results"
-	engagementID := "test123"
-	defer os.RemoveAll(tmpDir)
-
-	// Create directory
-	if err := os.MkdirAll(filepath.Join(tmpDir, engagementID), 0755); err != nil {
-		t.Fatalf("Failed to create directory: %v", err)
-	}
+	env := testutil.NewTestEnv(t)
+	defer env.Cleanup()
 
 	// Test data
 	err := AppendAuditRow(
-		tmpDir, // resultsDir parameter
-		engagementID,
-		"test-operator",
+		env.AppCtx.ResultsDir,
+		env.EngagementID,
+		env.Operator,
 		"check http",
 		"https://example.com",
 		"ok",
@@ -38,14 +33,13 @@ func TestAppendAuditRow(t *testing.T) {
 		t.Fatalf("AppendAuditRow failed: %v", err)
 	}
 
-	// Verify file exists
-	auditPath := filepath.Join(tmpDir, engagementID, "audit.csv")
-	if _, err := os.Stat(auditPath); os.IsNotExist(err) {
-		t.Fatal("Audit file was not created")
-	}
+	// Verify file exists using helper
+	auditPath := filepath.Join(env.EngagementID, "audit.csv")
+	env.MustExist(filepath.Join("results", auditPath))
 
 	// Read and verify content
-	file, err := os.Open(auditPath)
+	fullPath := filepath.Join(env.AppCtx.ResultsDir, env.EngagementID, "audit.csv")
+	file, err := os.Open(fullPath)
 	if err != nil {
 		t.Fatalf("Failed to open audit file: %v", err)
 	}
@@ -76,11 +70,11 @@ func TestAppendAuditRow(t *testing.T) {
 
 	// Verify data row
 	dataRow := records[1]
-	if dataRow[1] != engagementID {
-		t.Errorf("Expected engagement_id '%s', got '%s'", engagementID, dataRow[1])
+	if dataRow[1] != env.EngagementID {
+		t.Errorf("Expected engagement_id '%s', got '%s'", env.EngagementID, dataRow[1])
 	}
-	if dataRow[2] != "test-operator" {
-		t.Errorf("Expected operator 'test-operator', got '%s'", dataRow[2])
+	if dataRow[2] != env.Operator {
+		t.Errorf("Expected operator '%s', got '%s'", env.Operator, dataRow[2])
 	}
 	if dataRow[3] != "check http" {
 		t.Errorf("Expected command 'check http', got '%s'", dataRow[3])
@@ -97,19 +91,14 @@ func TestAppendAuditRow(t *testing.T) {
 }
 
 func TestAppendAuditRow_MultipleRows(t *testing.T) {
-	tmpDir := "test_results_multiple"
-	engagementID := "test456"
-	defer os.RemoveAll(tmpDir)
-
-	if err := os.MkdirAll(filepath.Join(tmpDir, engagementID), 0755); err != nil {
-		t.Fatalf("Failed to create directory: %v", err)
-	}
+	env := testutil.NewTestEnv(t)
+	defer env.Cleanup()
 
 	// Append multiple rows
 	for i := 0; i < 3; i++ {
 		err := AppendAuditRow(
-			tmpDir, // resultsDir parameter
-			engagementID,
+			env.AppCtx.ResultsDir,
+			env.EngagementID,
 			"operator",
 			"check http",
 			"https://example.com",
@@ -126,7 +115,7 @@ func TestAppendAuditRow_MultipleRows(t *testing.T) {
 	}
 
 	// Verify we have header + 3 data rows
-	auditPath := filepath.Join(tmpDir, engagementID, "audit.csv")
+	auditPath := filepath.Join(env.AppCtx.ResultsDir, env.EngagementID, "audit.csv")
 	file, _ := os.Open(auditPath)
 	defer file.Close()
 
@@ -139,18 +128,13 @@ func TestAppendAuditRow_MultipleRows(t *testing.T) {
 }
 
 func TestAppendAuditRow_WithError(t *testing.T) {
-	tmpDir := "test_results_error"
-	engagementID := "test789"
-	defer os.RemoveAll(tmpDir)
-
-	if err := os.MkdirAll(filepath.Join(tmpDir, engagementID), 0755); err != nil {
-		t.Fatalf("Failed to create directory: %v", err)
-	}
+	env := testutil.NewTestEnv(t)
+	defer env.Cleanup()
 
 	// Test with error
 	err := AppendAuditRow(
-		tmpDir, // resultsDir parameter
-		engagementID,
+		env.AppCtx.ResultsDir,
+		env.EngagementID,
 		"operator",
 		"check http",
 		"https://example.com",
@@ -167,7 +151,7 @@ func TestAppendAuditRow_WithError(t *testing.T) {
 	}
 
 	// Verify error is recorded
-	auditPath := filepath.Join(tmpDir, engagementID, "audit.csv")
+	auditPath := filepath.Join(env.AppCtx.ResultsDir, env.EngagementID, "audit.csv")
 	file, _ := os.Open(auditPath)
 	defer file.Close()
 
@@ -183,9 +167,8 @@ func TestAppendAuditRow_WithError(t *testing.T) {
 }
 
 func TestSaveRawCapture(t *testing.T) {
-	tmpDir := "test_results_raw"
-	engagementID := "rawtest123"
-	defer os.RemoveAll(tmpDir)
+	env := testutil.NewTestEnv(t)
+	defer env.Cleanup()
 
 	// Test data
 	headers := map[string][]string{
@@ -195,13 +178,13 @@ func TestSaveRawCapture(t *testing.T) {
 	}
 	bodySnippet := "<html><body>Test content</body></html>"
 
-	err := SaveRawCapture(tmpDir, engagementID, "https://example.com", headers, bodySnippet)
+	err := SaveRawCapture(env.AppCtx.ResultsDir, env.EngagementID, "https://example.com", headers, bodySnippet)
 	if err != nil {
 		t.Fatalf("SaveRawCapture failed: %v", err)
 	}
 
 	// Verify file was created
-	dir := filepath.Join(tmpDir, engagementID)
+	dir := filepath.Join(env.AppCtx.ResultsDir, env.EngagementID)
 	files, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatalf("Failed to read directory: %v", err)
@@ -248,18 +231,12 @@ func TestSaveRawCapture(t *testing.T) {
 }
 
 func TestHashFileSHA256(t *testing.T) {
-	tmpDir := "test_hash"
-	defer os.RemoveAll(tmpDir)
-	if err := os.MkdirAll(tmpDir, 0755); err != nil {
-		t.Fatalf("Failed to create directory: %v", err)
-	}
+	env := testutil.NewTestEnv(t)
+	defer env.Cleanup()
 
-	// Create a test file
-	testFile := filepath.Join(tmpDir, "test.txt")
+	// Create a test file using helper
 	testContent := []byte("This is a test file for SHA256 hashing")
-	if err := os.WriteFile(testFile, testContent, 0644); err != nil {
-		t.Fatalf("Failed to write test file: %v", err)
-	}
+	testFile := env.CreateFile("test.txt", testContent)
 
 	// Generate hash
 	hash, err := HashFileSHA256(testFile)
@@ -278,18 +255,12 @@ func TestHashFileSHA256(t *testing.T) {
 	}
 
 	// Verify .sha256 file was created
-	hashFile := testFile + ".sha256"
-	if _, err := os.Stat(hashFile); os.IsNotExist(err) {
-		t.Fatal(".sha256 file was not created")
-	}
+	env.MustExist("test.txt.sha256")
 
 	// Read and verify hash file content
-	hashContent, err := os.ReadFile(hashFile)
-	if err != nil {
-		t.Fatalf("Failed to read hash file: %v", err)
-	}
-
+	hashContent := env.ReadFile("test.txt.sha256")
 	hashStr := string(hashContent)
+
 	if !strings.Contains(hashStr, hash) {
 		t.Error("Hash not found in .sha256 file")
 	}
@@ -307,17 +278,12 @@ func TestHashFileSHA256_NonExistentFile(t *testing.T) {
 }
 
 func TestHashFileSHA256_Consistency(t *testing.T) {
-	tmpDir := "test_hash_consistency"
-	defer os.RemoveAll(tmpDir)
-	if err := os.MkdirAll(tmpDir, 0755); err != nil {
-		t.Fatalf("Failed to create directory: %v", err)
-	}
+	env := testutil.NewTestEnv(t)
+	defer env.Cleanup()
 
-	testFile := filepath.Join(tmpDir, "consistency.txt")
+	// Create test file using helper
 	testContent := []byte("Consistent content")
-	if err := os.WriteFile(testFile, testContent, 0644); err != nil {
-		t.Fatalf("Failed to write test file: %v", err)
-	}
+	testFile := env.CreateFile("consistency.txt", testContent)
 
 	// Generate hash twice
 	hash1, _ := HashFileSHA256(testFile)
