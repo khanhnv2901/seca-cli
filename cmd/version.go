@@ -7,10 +7,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Version information (injected at build time)
+// Version information (injected at build time via -ldflags)
+// These default values indicate a development build
 var (
-	Version   = "1.0.0"
-	GitCommit = "dev"
+	Version   = "dev"
+	GitCommit = "unknown"
 	BuildDate = "unknown"
 )
 

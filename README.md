@@ -716,12 +716,17 @@ go mod download
 # Run tests
 make test
 
-# Build
+# Build (development version)
 make build
+
+# Build with specific version
+VERSION=1.2.0 make build
 
 # Run
 ./seca --help
 ```
+
+For detailed information about version management and build options, see [VERSION.md](VERSION.md).
 
 ## Contributing
 

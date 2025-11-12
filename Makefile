@@ -234,7 +234,13 @@ clean-all: ## Remove all generated files, test data, and build artifacts
 
 build: ## Build the SECA-CLI binary
 	@echo "$(YELLOW)Building SECA-CLI...$(NC)"
-	@go build -o seca main.go
+	@VERSION=$${VERSION:-dev}; \
+	GIT_COMMIT=$$(git rev-parse --short HEAD 2>/dev/null || echo "unknown"); \
+	BUILD_DATE=$$(date -u +"%Y-%m-%dT%H:%M:%SZ"); \
+	LDFLAGS="-X github.com/khanhnv2901/seca-cli/cmd.Version=$$VERSION \
+	         -X github.com/khanhnv2901/seca-cli/cmd.GitCommit=$$GIT_COMMIT \
+	         -X github.com/khanhnv2901/seca-cli/cmd.BuildDate=$$BUILD_DATE"; \
+	go build -ldflags="$$LDFLAGS" -o seca main.go
 	@echo "$(GREEN)✓ Build complete: ./seca$(NC)"
 
 test: ## Run unit tests
