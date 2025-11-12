@@ -75,6 +75,15 @@ func (h *HTTPChecker) Check(ctx context.Context, target string) CheckResult {
 	// Analyze security headers
 	result.SecurityHeaders = AnalyzeSecurityHeaders(resp.Header)
 
+	// Analyze cookies for Secure/HttpOnly flags (OWASP ASVS §3.4)
+	if cookieFindings := AnalyzeCookies(resp); len(cookieFindings) > 0 {
+		result.CookieFindings = cookieFindings
+		if result.Notes != "" {
+			result.Notes += "; "
+		}
+		result.Notes += fmt.Sprintf("%d cookie(s) missing Secure or HttpOnly flag", len(cookieFindings))
+	}
+
 	// Analyze TLS/crypto compliance (OWASP ASVS §9, PCI DSS 4.1)
 	if resp.TLS != nil {
 		result.TLSCompliance = AnalyzeTLSCompliance(resp.TLS)

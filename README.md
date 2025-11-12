@@ -573,6 +573,10 @@ Results include:
 }
 ```
 
+### Cookie & Session Flag Analysis
+
+SECA-CLI inspects `Set-Cookie` headers for missing `Secure` or `HttpOnly` attributes in accordance with **OWASP ASVS §3.4**. HTTP reports highlight every cookie that lacks these protections so teams can quickly remediate insecure session handling.
+
 ### Best Practices
 
 1. **Aim for Grade A** (90+ points) - Implement all critical headers

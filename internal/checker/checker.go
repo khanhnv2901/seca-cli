@@ -20,6 +20,7 @@ type CheckResult struct {
 	ResponseTime    float64                `json:"response_time_ms,omitempty"`
 	SecurityHeaders *SecurityHeadersResult `json:"security_headers,omitempty"`
 	TLSCompliance   *TLSComplianceResult   `json:"tls_compliance,omitempty"`
+	CookieFindings  []CookieFinding        `json:"cookie_findings,omitempty"`
 	Notes           string                 `json:"notes,omitempty"`
 	Error           string                 `json:"error,omitempty"`
 }
@@ -56,6 +57,14 @@ type TLSComplianceResult struct {
 	Recommendations []string            `json:"recommendations,omitempty"`
 	Standards       ComplianceStandards `json:"standards"`
 	CertificateInfo *CertificateInfo    `json:"certificate_info,omitempty"`
+}
+
+// CookieFinding captures insecure cookie configurations (OWASP ASVS §3.4).
+type CookieFinding struct {
+	Name              string `json:"name"`
+	MissingSecure     bool   `json:"missing_secure"`
+	MissingHTTPOnly   bool   `json:"missing_http_only"`
+	OriginalSetCookie string `json:"set_cookie,omitempty"`
 }
 
 // ComplianceIssue represents a compliance violation

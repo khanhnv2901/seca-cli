@@ -126,6 +126,11 @@
 - {{.}}
 {{end}}
 {{end}}{{end}}
+{{if $result.CookieFindings}}#### Cookie & Session Flags (OWASP ASVS §3.4)
+{{range $result.CookieFindings}}
+- **{{.Name}}**: {{if .MissingSecure}}Missing Secure{{end}}{{if and .MissingSecure .MissingHTTPOnly}}, {{end}}{{if .MissingHTTPOnly}}Missing HttpOnly{{end}}{{if .OriginalSetCookie}} (`{{.OriginalSetCookie}}`){{end}}
+{{end}}
+{{end}}
 {{if $result.DNSRecords}}#### DNS Records
 {{if index $result.DNSRecords "a_records"}}
 **A Records (IPv4):**

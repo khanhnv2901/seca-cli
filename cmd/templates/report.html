@@ -488,6 +488,32 @@ li {
         </div>
         {{end}}
 
+        {{if $result.CookieFindings}}
+        <div class="section">
+            <h4>Cookie & Session Flags (OWASP ASVS §3.4)</h4>
+            <table>
+                <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Missing Secure</th>
+                    <th>Missing HttpOnly</th>
+                    <th>Set-Cookie</th>
+                </tr>
+                </thead>
+                <tbody>
+                {{range $result.CookieFindings}}
+                <tr>
+                    <td>{{.Name}}</td>
+                    <td>{{if .MissingSecure}}⚠️{{else}}✅{{end}}</td>
+                    <td>{{if .MissingHTTPOnly}}⚠️{{else}}✅{{end}}</td>
+                    <td>{{if .OriginalSetCookie}}<span class="code">{{.OriginalSetCookie}}</span>{{else}}-{{end}}</td>
+                </tr>
+                {{end}}
+                </tbody>
+            </table>
+        </div>
+        {{end}}
+
         {{if $result.DNSRecords}}
         <div class="section">
             <h4>DNS Records</h4>
