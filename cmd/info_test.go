@@ -15,6 +15,7 @@ func setupTestAppContext() func() {
 		Logger:     nil, // Not needed for most tests
 		Operator:   "test-operator",
 		ResultsDir: "/tmp/test-results",
+		Config:     newCLIConfig(),
 	}
 	return func() {
 		globalAppContext = originalAppCtx

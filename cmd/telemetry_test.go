@@ -26,6 +26,7 @@ func TestRecordTelemetry_WritesMetrics(t *testing.T) {
 	appCtx := &AppContext{
 		Operator:   env.Operator,
 		ResultsDir: env.AppCtx.ResultsDir,
+		Config:     newCLIConfig(),
 	}
 
 	if err := recordTelemetry(appCtx, "eng-123", "check http", results, 3*time.Second); err != nil {

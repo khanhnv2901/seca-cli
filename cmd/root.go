@@ -17,6 +17,7 @@ type AppContext struct {
 	Logger     *zap.SugaredLogger
 	Operator   string
 	ResultsDir string
+	Config     *CLIConfig
 }
 
 var cfgFile string
@@ -62,8 +63,12 @@ Documentation:
 			// Otherwise, it's fine if no config file exists (using defaults)
 		}
 
+		applyConfigDefaults(cmd)
+
 		// Initialize AppContext
-		appCtx := &AppContext{}
+		appCtx := &AppContext{
+			Config: cliConfig,
+		}
 
 		// Set results directory
 		appCtx.ResultsDir = viper.GetString("results_dir")
@@ -91,6 +96,9 @@ Documentation:
 
 		// Get operator from flag
 		operatorFlag, _ := cmd.Flags().GetString("operator")
+		if operatorFlag == "" {
+			operatorFlag = appCtx.Config.Defaults.Operator
+		}
 		appCtx.Operator = operatorFlag
 
 		// ensure operator is set (via flag or env default)
@@ -163,7 +171,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.seca-cli.yaml)")
 
 	// operator persistent flag (default from USER env)
-	defaultOperator := os.Getenv("USER")
+	defaultOperator := cliConfig.Defaults.Operator
 	rootCmd.PersistentFlags().StringP("operator", "o", defaultOperator, "operator name (or set via USER env)")
 
 	// add subcommands

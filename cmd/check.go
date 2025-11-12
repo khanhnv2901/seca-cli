@@ -32,23 +32,6 @@ type RunOutput struct {
 	Results  []checker.CheckResult `json:"results"`
 }
 
-var (
-	concurrency      int
-	rateLimit        int // requests per second
-	timeoutSecs      int
-	auditAppendRaw   bool
-	retentionDays    int
-	autoSign         bool
-	gpgKey           string
-	telemetryEnabled bool
-	progressEnabled  bool
-)
-
-var (
-	dnsNameservers []string
-	dnsTimeout     int
-)
-
 var checkCmd = &cobra.Command{
 	Use:   "check",
 	Short: "Run safe, authorized checks against scoped targets (no scanning/exploitation)",
@@ -60,9 +43,10 @@ var checkHTTPCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runCheckCommand(cmd, checkConfig{
 			CreateChecker: func(appCtx *AppContext, params checkParams) checker.Checker {
+				runtimeCfg := appCtx.Config.Check
 				return &checker.HTTPChecker{
-					Timeout:    time.Duration(timeoutSecs) * time.Second,
-					CaptureRaw: auditAppendRaw,
+					Timeout:    time.Duration(runtimeCfg.TimeoutSecs) * time.Second,
+					CaptureRaw: runtimeCfg.AuditAppendRaw,
 					RawHandler: func(target string, headers http.Header, bodySnippet string) error {
 						return SaveRawCapture(appCtx.ResultsDir, params.ID, target, headers, bodySnippet)
 					},
@@ -86,7 +70,7 @@ var checkHTTPCmd = &cobra.Command{
 				}
 			},
 			ResultsFilename:    "results.json",
-			TimeoutSecs:        timeoutSecs,
+			TimeoutSecs:        cliConfig.Check.TimeoutSecs,
 			VerificationCmd:    "sha256sum -c audit.csv.sha256 && sha256sum -c results_*.sha256",
 			SupportsRawCapture: true,
 			PrintSummary: func(results []checker.CheckResult, resultsPath, auditPath, auditHash, resultsHash string) {
@@ -115,9 +99,10 @@ All checks are safe, non-intrusive DNS queries only.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runCheckCommand(cmd, checkConfig{
 			CreateChecker: func(appCtx *AppContext, params checkParams) checker.Checker {
+				runtimeCfg := appCtx.Config.Check
 				return &checker.DNSChecker{
-					Timeout:    time.Duration(dnsTimeout) * time.Second,
-					NameServer: dnsNameservers,
+					Timeout:    time.Duration(runtimeCfg.DNS.Timeout) * time.Second,
+					NameServer: runtimeCfg.DNS.Nameservers,
 				}
 			},
 			CreateAuditFn: func(appCtx *AppContext, params checkParams, chk checker.Checker) func(string, checker.CheckResult, float64) error {
@@ -138,7 +123,7 @@ All checks are safe, non-intrusive DNS queries only.`,
 				}
 			},
 			ResultsFilename:    "dns_results.json",
-			TimeoutSecs:        dnsTimeout,
+			TimeoutSecs:        cliConfig.Check.DNS.Timeout,
 			VerificationCmd:    "sha256sum -c audit.csv.sha256 && sha256sum -c dns_results.json.sha256",
 			SupportsRawCapture: false,
 			PrintSummary: func(results []checker.CheckResult, resultsPath, auditPath, auditHash, resultsHash string) {
@@ -200,22 +185,23 @@ type checkConfig struct {
 func runCheckCommand(cmd *cobra.Command, config checkConfig) error {
 	// Get application context
 	appCtx := getAppContext(cmd)
+	runtimeCfg := appCtx.Config.Check
 
 	// Parse flags
 	params := checkParams{
 		ID:             cmd.Flag("id").Value.String(),
 		ROEConfirm:     cmd.Flag("roe-confirm").Value.String() == "true",
 		ComplianceMode: cmd.Flag("compliance-mode").Value.String() == "true",
-		AutoSign:       cmd.Flag("auto-sign").Value.String() == "true",
-		GPGKey:         cmd.Flag("gpg-key").Value.String(),
+		AutoSign:       runtimeCfg.AutoSign,
+		GPGKey:         runtimeCfg.GPGKey,
 	}
 
 	// Validate parameters
 	retentionForValidation := 0
 	if config.SupportsRawCapture {
-		retentionForValidation = retentionDays
+		retentionForValidation = runtimeCfg.RetentionDays
 	}
-	if err := validateCheckParams(params, appCtx, config.SupportsRawCapture && auditAppendRaw, retentionForValidation); err != nil {
+	if err := validateCheckParams(params, appCtx, config.SupportsRawCapture && runtimeCfg.AuditAppendRaw, retentionForValidation); err != nil {
 		return err
 	}
 
@@ -238,7 +224,7 @@ func runCheckCommand(cmd *cobra.Command, config checkConfig) error {
 	auditFn := config.CreateAuditFn(appCtx, params, chk)
 
 	var progress *progressPrinter
-	if progressEnabled {
+	if runtimeCfg.ProgressEnabled {
 		progress = newProgressPrinter(len(eng.Scope), chk.Name())
 		progress.Start()
 		if auditFn != nil {
@@ -260,8 +246,8 @@ func runCheckCommand(cmd *cobra.Command, config checkConfig) error {
 
 	// Create runner and execute checks
 	runner := &checker.Runner{
-		Concurrency: concurrency,
-		RateLimit:   rateLimit,
+		Concurrency: runtimeCfg.Concurrency,
+		RateLimit:   runtimeCfg.RateLimit,
 		Timeout:     time.Duration(config.TimeoutSecs) * time.Second,
 	}
 
@@ -307,10 +293,10 @@ func runCheckCommand(cmd *cobra.Command, config checkConfig) error {
 
 	// Print compliance summary if in compliance mode
 	if params.ComplianceMode {
-		rawCaptureEnabled := config.SupportsRawCapture && auditAppendRaw
+		rawCaptureEnabled := config.SupportsRawCapture && runtimeCfg.AuditAppendRaw
 		retentionDaysForSummary := 0
 		if rawCaptureEnabled {
-			retentionDaysForSummary = retentionDays
+			retentionDaysForSummary = runtimeCfg.RetentionDays
 		}
 		printComplianceSummary(
 			appCtx, eng, auditHash, resultsHash,
@@ -319,7 +305,7 @@ func runCheckCommand(cmd *cobra.Command, config checkConfig) error {
 		)
 	}
 
-	if telemetryEnabled {
+	if runtimeCfg.TelemetryEnabled {
 		runDuration := time.Since(startAll)
 		if err := recordTelemetry(appCtx, params.ID, chk.Name(), results, runDuration); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to record telemetry: %v\n", err)
@@ -474,27 +460,27 @@ func addCommonCheckFlags(cmd *cobra.Command) {
 	cmd.Flags().String("id", "", "Engagement id")
 	cmd.Flags().Bool("roe-confirm", false, "Confirm you have explicit written authorization (required)")
 	cmd.Flags().Bool("compliance-mode", false, "Enable compliance enforcement (hashing, retention checks)")
-	cmd.Flags().Bool("auto-sign", false, "Automatically sign .sha256 files using configured GPG key")
-	cmd.Flags().String("gpg-key", "", "GPG key ID or email for signing (required if --auto-sign)")
+	cmd.Flags().BoolVar(&cliConfig.Check.AutoSign, "auto-sign", cliConfig.Check.AutoSign, "Automatically sign .sha256 files using configured GPG key")
+	cmd.Flags().StringVar(&cliConfig.Check.GPGKey, "gpg-key", cliConfig.Check.GPGKey, "GPG key ID or email for signing (required if --auto-sign)")
 }
 
 func init() {
 	// Global check flags (apply to all subcommands)
-	checkCmd.PersistentFlags().IntVarP(&concurrency, "concurrency", "c", 1, "max concurrent requests")
-	checkCmd.PersistentFlags().IntVarP(&rateLimit, "rate", "r", 1, "requests per second (global)")
-	checkCmd.PersistentFlags().IntVarP(&timeoutSecs, "timeout", "t", 10, "request timeout in seconds")
-	checkCmd.PersistentFlags().BoolVar(&telemetryEnabled, "telemetry", false, "Record telemetry metrics (durations, success rates)")
-	checkCmd.PersistentFlags().BoolVar(&progressEnabled, "progress", false, "Display live progress for checks")
+	checkCmd.PersistentFlags().IntVarP(&cliConfig.Check.Concurrency, "concurrency", "c", cliConfig.Check.Concurrency, "max concurrent requests")
+	checkCmd.PersistentFlags().IntVarP(&cliConfig.Check.RateLimit, "rate", "r", cliConfig.Check.RateLimit, "requests per second (global)")
+	checkCmd.PersistentFlags().IntVarP(&cliConfig.Check.TimeoutSecs, "timeout", "t", cliConfig.Check.TimeoutSecs, "request timeout in seconds")
+	checkCmd.PersistentFlags().BoolVar(&cliConfig.Check.TelemetryEnabled, "telemetry", cliConfig.Check.TelemetryEnabled, "Record telemetry metrics (durations, success rates)")
+	checkCmd.PersistentFlags().BoolVar(&cliConfig.Check.ProgressEnabled, "progress", cliConfig.Check.ProgressEnabled, "Display live progress for checks")
 
 	// HTTP-specific flags
 	addCommonCheckFlags(checkHTTPCmd)
-	checkHTTPCmd.Flags().BoolVar(&auditAppendRaw, "audit-append-raw", false, "Save limited raw headers/body for auditing (handle carefully)")
-	checkHTTPCmd.Flags().IntVar(&retentionDays, "retention-days", 0, "Retention period (days) for raw captures; required in compliance mode if --audit-append-raw is used")
+	checkHTTPCmd.Flags().BoolVar(&cliConfig.Check.AuditAppendRaw, "audit-append-raw", cliConfig.Check.AuditAppendRaw, "Save limited raw headers/body for auditing (handle carefully)")
+	checkHTTPCmd.Flags().IntVar(&cliConfig.Check.RetentionDays, "retention-days", cliConfig.Check.RetentionDays, "Retention period (days) for raw captures; required in compliance mode if --audit-append-raw is used")
 
 	// DNS-specific flags
 	addCommonCheckFlags(checkDNSCmd)
-	checkDNSCmd.Flags().StringSliceVar(&dnsNameservers, "nameservers", []string{}, "Custom DNS nameservers (e.g., 8.8.8.8:53,1.1.1.1:53)")
-	checkDNSCmd.Flags().IntVar(&dnsTimeout, "dns-timeout", 10, "DNS query timeout in seconds")
+	checkDNSCmd.Flags().StringSliceVar(&cliConfig.Check.DNS.Nameservers, "nameservers", cliConfig.Check.DNS.Nameservers, "Custom DNS nameservers (e.g., 8.8.8.8:53,1.1.1.1:53)")
+	checkDNSCmd.Flags().IntVar(&cliConfig.Check.DNS.Timeout, "dns-timeout", cliConfig.Check.DNS.Timeout, "DNS query timeout in seconds")
 
 	checkCmd.AddCommand(checkHTTPCmd)
 	checkCmd.AddCommand(checkDNSCmd)

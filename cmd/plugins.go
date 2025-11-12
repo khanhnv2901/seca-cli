@@ -19,7 +19,10 @@ type checkerPluginDefinition struct {
 	Env             map[string]string `json:"env"`
 	TimeoutSeconds  int               `json:"timeout"`
 	ResultsFilename string            `json:"results_filename"`
+	APIVersion      int               `json:"api_version"`
 }
+
+const currentPluginAPIVersion = 1
 
 func registerPluginCommands() {
 	defs, err := loadCheckerPlugins()
@@ -66,6 +69,15 @@ func loadCheckerPlugins() ([]checkerPluginDefinition, error) {
 		var def checkerPluginDefinition
 		if err := json.Unmarshal(data, &def); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to parse plugin %s: %v\n", entry.Name(), err)
+			continue
+		}
+
+		if def.APIVersion == 0 {
+			def.APIVersion = currentPluginAPIVersion
+		}
+
+		if def.APIVersion != currentPluginAPIVersion {
+			fmt.Fprintf(os.Stderr, "Warning: unsupported plugin API version %d in %s (expected %d)\n", def.APIVersion, entry.Name(), currentPluginAPIVersion)
 			continue
 		}
 

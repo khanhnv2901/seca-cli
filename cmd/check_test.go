@@ -210,8 +210,8 @@ func TestRunOutput_JSON(t *testing.T) {
 // Tests for auto-sign validation (cmd package functionality)
 func TestAutoSign_ValidationWithoutGPGKey(t *testing.T) {
 	// Test that --auto-sign without --gpg-key returns an error
-	autoSign = true
-	gpgKey = ""
+	cliConfig.Check.AutoSign = true
+	cliConfig.Check.GPGKey = ""
 
 	err := validateAutoSignFlags()
 	if err == nil {
@@ -226,8 +226,8 @@ func TestAutoSign_ValidationWithoutGPGKey(t *testing.T) {
 
 func TestAutoSign_ValidationWithGPGKey(t *testing.T) {
 	// Test that --auto-sign with --gpg-key does not return an error
-	autoSign = true
-	gpgKey = "test@example.com"
+	cliConfig.Check.AutoSign = true
+	cliConfig.Check.GPGKey = "test@example.com"
 
 	err := validateAutoSignFlags()
 	if err != nil {
@@ -237,8 +237,8 @@ func TestAutoSign_ValidationWithGPGKey(t *testing.T) {
 
 func TestAutoSign_ValidationWhenDisabled(t *testing.T) {
 	// Test that when --auto-sign is false, no validation error occurs
-	autoSign = false
-	gpgKey = ""
+	cliConfig.Check.AutoSign = false
+	cliConfig.Check.GPGKey = ""
 
 	err := validateAutoSignFlags()
 	if err != nil {
@@ -248,8 +248,8 @@ func TestAutoSign_ValidationWhenDisabled(t *testing.T) {
 
 // Helper function to validate auto-sign flags
 func validateAutoSignFlags() error {
-	if autoSign {
-		if gpgKey == "" {
+	if cliConfig.Check.AutoSign {
+		if cliConfig.Check.GPGKey == "" {
 			return fmt.Errorf("--gpg-key required with --auto-sign")
 		}
 	}
