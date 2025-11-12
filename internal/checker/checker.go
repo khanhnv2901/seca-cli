@@ -22,6 +22,7 @@ type CheckResult struct {
 	TLSCompliance    *TLSComplianceResult   `json:"tls_compliance,omitempty"`
 	CookieFindings   []CookieFinding        `json:"cookie_findings,omitempty"`
 	CORSInsights     *CORSReport            `json:"cors,omitempty"`
+	CachePolicy      *CachePolicy           `json:"cache_policy,omitempty"`
 	ThirdPartyScripts []string              `json:"third_party_scripts,omitempty"`
 	Notes           string                 `json:"notes,omitempty"`
 	Error           string                 `json:"error,omitempty"`
@@ -79,6 +80,14 @@ type CORSReport struct {
 	MissingAllowOrigin bool     `json:"missing_allow_origin"`
 	AllowsAnyOrigin    bool     `json:"allows_any_origin"`
 	Issues             []string `json:"issues,omitempty"`
+}
+
+// CachePolicy captures caching headers for evidence/compliance.
+type CachePolicy struct {
+	CacheControl string   `json:"cache_control,omitempty"`
+	Expires      string   `json:"expires,omitempty"`
+	Pragma       string   `json:"pragma,omitempty"`
+	Issues       []string `json:"issues,omitempty"`
 }
 
 // ComplianceIssue represents a compliance violation

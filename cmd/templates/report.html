@@ -523,7 +523,18 @@ li {
             <h5>Issues:</h5>
             <ul>{{range $result.CORSInsights.Issues}}<li>{{.}}</li>{{end}}</ul>
             {{end}}
-            {{if $result.Notes}}<p><strong>Notes:</strong> {{ $result.Notes }}</p>{{end}}
+        </div>
+        {{end}}
+        {{if $result.CachePolicy}}
+        <div class="section">
+            <h4>Cache Policy / Performance</h4>
+            <p><strong>Cache-Control:</strong> {{if $result.CachePolicy.CacheControl}}{{ $result.CachePolicy.CacheControl }}{{else}}(missing){{end}}</p>
+            <p><strong>Expires:</strong> {{if $result.CachePolicy.Expires}}{{ $result.CachePolicy.Expires }}{{else}}(missing){{end}}</p>
+            <p><strong>Pragma:</strong> {{if $result.CachePolicy.Pragma}}{{ $result.CachePolicy.Pragma }}{{else}}(missing){{end}}</p>
+            {{if $result.CachePolicy.Issues}}
+            <h5>Issues:</h5>
+            <ul>{{range $result.CachePolicy.Issues}}<li>{{.}}</li>{{end}}</ul>
+            {{end}}
         </div>
         {{end}}
         {{if $result.ThirdPartyScripts}}

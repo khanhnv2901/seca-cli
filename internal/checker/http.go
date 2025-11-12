@@ -25,10 +25,15 @@ const bodySnippetLimit = 32768
 
 // Check performs an HTTP/HTTPS check on the target
 func (h *HTTPChecker) Check(ctx context.Context, target string) CheckResult {
+	startTime := time.Now()
 	result := CheckResult{
-		Target:    target,
-		CheckedAt: time.Now().UTC(),
+		Target:     target,
+		CheckedAt:  time.Now().UTC(),
+		DNSRecords: make(map[string]interface{}),
 	}
+	defer func() {
+		result.ResponseTime = time.Since(startTime).Seconds() * 1000
+	}()
 
 	// Normalize URL using shared utility
 	targetInfo := ParseTarget(target)
@@ -80,6 +85,7 @@ func (h *HTTPChecker) Check(ctx context.Context, target string) CheckResult {
 
 	// Analyze security headers
 	result.SecurityHeaders = AnalyzeSecurityHeaders(resp.Header)
+	result.CachePolicy = AnalyzeCachePolicy(resp.Header)
 
 	// Analyze cookies for Secure/HttpOnly flags (OWASP ASVS §3.4)
 	if cookieFindings := AnalyzeCookies(resp); len(cookieFindings) > 0 {

@@ -139,6 +139,14 @@
 {{range $result.CORSInsights.Issues}}- {{.}}
 {{end}}{{end}}
 {{end}}
+{{if $result.CachePolicy}}#### Cache Policy / Performance
+- **Cache-Control:** {{if $result.CachePolicy.CacheControl}}{{ $result.CachePolicy.CacheControl }}{{else}}(missing){{end}}
+- **Expires:** {{if $result.CachePolicy.Expires}}{{ $result.CachePolicy.Expires }}{{else}}(missing){{end}}
+- **Pragma:** {{if $result.CachePolicy.Pragma}}{{ $result.CachePolicy.Pragma }}{{else}}(missing){{end}}
+{{if $result.CachePolicy.Issues}}**Issues:**
+{{range $result.CachePolicy.Issues}}- {{.}}
+{{end}}{{end}}
+{{end}}
 {{if $result.ThirdPartyScripts}}#### Third-Party Scripts (Supply Chain Visibility)
 {{range $result.ThirdPartyScripts}}
 - {{.}}

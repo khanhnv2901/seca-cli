@@ -24,6 +24,7 @@ func TestHTTPChecker_Name(t *testing.T) {
 func TestHTTPChecker_MockServer(t *testing.T) {
 	// Create a test HTTP server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=60")
 		w.Header().Set("Server", "test-server")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("OK"))
@@ -54,6 +55,14 @@ func TestHTTPChecker_MockServer(t *testing.T) {
 
 	if result.Target != server.URL {
 		t.Errorf("Expected target '%s', got '%s'", server.URL, result.Target)
+	}
+
+	if result.ResponseTime <= 0 {
+		t.Error("Expected ResponseTime to be recorded")
+	}
+
+	if result.CachePolicy == nil || result.CachePolicy.CacheControl == "" {
+		t.Error("Expected cache policy to capture Cache-Control header")
 	}
 }
 
