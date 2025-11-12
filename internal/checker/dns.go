@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strings"
 	"time"
 )
 
@@ -22,11 +21,8 @@ func (d *DNSChecker) Check(ctx context.Context, target string) CheckResult {
 		DNSRecords: make(map[string]interface{}),
 	}
 
-	// Remove protocol prefix if present
-	host := strings.TrimPrefix(target, "http://")
-	host = strings.TrimPrefix(host, "https://")
-	host = strings.Split(host, "/")[0] // Remove path
-	host = strings.Split(host, ":")[0] // Remove port
+	// Extract hostname using shared utility
+	host := ExtractHost(target)
 
 	// Create resolver
 	resolver := &net.Resolver{

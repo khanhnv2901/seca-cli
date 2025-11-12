@@ -24,13 +24,10 @@ func (h *HTTPChecker) Check(ctx context.Context, target string) CheckResult {
 		CheckedAt: time.Now().UTC(),
 	}
 
-	// Normalize URL
-	u := target
-	parsed, err := url.Parse(target)
-	if err != nil || parsed.Scheme == "" {
-		u = "http://" + target
-		parsed, _ = url.Parse(u)
-	}
+	// Normalize URL using shared utility
+	targetInfo := ParseTarget(target)
+	u := targetInfo.FullURL
+	parsed, _ := url.Parse(u)
 
 	// Create HTTP client
 	client := &http.Client{
