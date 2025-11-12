@@ -50,7 +50,7 @@ func TestLoadEngagements_ValidFile(t *testing.T) {
 	}
 
 	// Write test data
-	data, _ := json.MarshalIndent(testEngagements, "", "  ")
+	data, _ := json.MarshalIndent(testEngagements, jsonPrefix, jsonIndent)
 	if err := os.WriteFile(filePath, data, 0644); err != nil {
 		t.Fatalf("Failed to write test file: %v", err)
 	}

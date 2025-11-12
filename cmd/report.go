@@ -97,7 +97,7 @@ var reportGenerateCmd = &cobra.Command{
 }
 
 func generateJSONReport(output *RunOutput) (string, error) {
-	data, err := json.MarshalIndent(output, "", "  ")
+	data, err := json.MarshalIndent(output, jsonPrefix, jsonIndent)
 	if err != nil {
 		return "", err
 	}

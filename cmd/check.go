@@ -359,7 +359,7 @@ func writeResultsAndHash(appCtx *AppContext, id string, resultsFilename string, 
 	out.Metadata.CompleteAt = time.Now().UTC()
 	out.Metadata.TotalTargets = len(results)
 
-	b, err := json.MarshalIndent(out, "", "  ")
+	b, err := json.MarshalIndent(out, jsonPrefix, jsonIndent)
 	if err != nil {
 		return "", "", "", "", fmt.Errorf("failed to marshal results: %w", err)
 	}
@@ -377,7 +377,7 @@ func writeResultsAndHash(appCtx *AppContext, id string, resultsFilename string, 
 
 	// Update metadata with audit hash and write final results JSON
 	out.Metadata.AuditHash = auditHash
-	b, err = json.MarshalIndent(out, "", "  ")
+	b, err = json.MarshalIndent(out, jsonPrefix, jsonIndent)
 	if err != nil {
 		return "", "", "", "", fmt.Errorf("failed to marshal final results: %w", err)
 	}

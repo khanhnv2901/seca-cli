@@ -62,7 +62,7 @@ var engagementListCmd = &cobra.Command{
 	Short: "List all engagements",
 	Run: func(cmd *cobra.Command, args []string) {
 		list := loadEngagements()
-		b, _ := json.MarshalIndent(list, "", "  ")
+		b, _ := json.MarshalIndent(list, jsonPrefix, jsonIndent)
 		fmt.Println(string(b))
 	},
 }
@@ -143,7 +143,7 @@ func saveEngagements(list []Engagement) {
 		return
 	}
 
-	b, err := json.MarshalIndent(list, "", "  ")
+	b, err := json.MarshalIndent(list, jsonPrefix, jsonIndent)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error marshaling engagements: %v\n", err)
 		return

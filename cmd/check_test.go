@@ -186,7 +186,7 @@ func TestRunOutput_JSON(t *testing.T) {
 	}
 
 	// Marshal
-	data, err := json.MarshalIndent(output, "", "  ")
+	data, err := json.MarshalIndent(output, jsonPrefix, jsonIndent)
 	if err != nil {
 		t.Fatalf("Failed to marshal: %v", err)
 	}
