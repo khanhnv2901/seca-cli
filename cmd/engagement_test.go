@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -288,4 +289,39 @@ func TestEngagement_ROEAgreeValidation(t *testing.T) {
 	if !engagement.ROEAgree {
 		t.Error("Expected ROEAgree to be true after update")
 	}
+}
+
+func TestNormalizeScopeEntries(t *testing.T) {
+	t.Run("valid entries", func(t *testing.T) {
+		input := []string{
+			" https://example.com/login ",
+			"api.example.com",
+			"example.com:8443/report",
+			"192.168.1.10",
+		}
+		normalized, err := normalizeScopeEntries(input)
+		if err != nil {
+			t.Fatalf("Expected entries to be valid, got error: %v", err)
+		}
+		for i, original := range input {
+			if normalized[i] != strings.TrimSpace(original) {
+				t.Errorf("Entry %d was not trimmed correctly. Expected %q, got %q", i, strings.TrimSpace(original), normalized[i])
+			}
+		}
+	})
+
+	t.Run("invalid entries", func(t *testing.T) {
+		testCases := [][]string{
+			{""},
+			{"ftp://example.com"},
+			{"exa mple.com"},
+			{"http://"},
+		}
+
+		for _, tc := range testCases {
+			if _, err := normalizeScopeEntries(tc); err == nil {
+				t.Errorf("Expected error for scope entries %v, but got none", tc)
+			}
+		}
+	})
 }

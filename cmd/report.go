@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	_ "embed"
+	"embed"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -15,11 +15,48 @@ import (
 	"github.com/spf13/cobra"
 )
 
-//go:embed templates/report.html
-var htmlTemplate string
+const (
+	htmlTemplatePath     = "templates/report.html"
+	markdownTemplatePath = "templates/report.md"
+)
 
-//go:embed templates/report.md
-var markdownTemplate string
+//go:embed templates/report.html templates/report.md
+var reportTemplateFS embed.FS
+
+var securityHeaderNames = []string{
+	"Strict-Transport-Security",
+	"Content-Security-Policy",
+	"X-Content-Type-Options",
+	"X-Frame-Options",
+	"Referrer-Policy",
+	"Permissions-Policy",
+	"Cross-Origin-Opener-Policy",
+	"Cross-Origin-Embedder-Policy",
+}
+
+var (
+	htmlTemplateFuncs = template.FuncMap{
+		"add":                 addInts,
+		"join":                strings.Join,
+		"headersPresentCount": headersPresentCount,
+	}
+
+	markdownTemplateFuncs = template.FuncMap{
+		"add":                    addInts,
+		"join":                   strings.Join,
+		"headersPresentCount":    headersPresentCount,
+		"highSeverityMissing":    missingHighSeverityHeaders,
+		"mediumSeverityMissing":  missingMediumSeverityHeaders,
+		"hasHighSeverityMissing": hasCriticalMissingHeaders,
+	}
+
+	htmlReportTemplate = template.Must(
+		template.New("report.html").Funcs(htmlTemplateFuncs).ParseFS(reportTemplateFS, htmlTemplatePath),
+	)
+	markdownReportTemplate = template.Must(
+		template.New("report.md").Funcs(markdownTemplateFuncs).ParseFS(reportTemplateFS, markdownTemplatePath),
+	)
+)
 
 var reportCmd = &cobra.Command{
 	Use:   "report",
@@ -106,124 +143,8 @@ func generateJSONReport(output *RunOutput) (string, error) {
 }
 
 func generateMarkdownReport(output *RunOutput) (string, error) {
-	// Calculate summary statistics
-	okCount := 0
-	errorCount := 0
-	for _, r := range output.Results {
-		if r.Status == "ok" {
-			okCount++
-		} else {
-			errorCount++
-		}
-	}
-
-	// Calculate success rate
-	successRate := 0.0
-	if len(output.Results) > 0 {
-		successRate = float64(okCount) / float64(len(output.Results)) * 100
-	}
-
-	// Prepare template data
-	data := TemplateData{
-		Metadata:     output.Metadata,
-		Results:      output.Results,
-		GeneratedAt:  time.Now().Format(time.RFC3339),
-		StartedAt:    output.Metadata.StartAt.Format(time.RFC3339),
-		CompletedAt:  output.Metadata.CompleteAt.Format(time.RFC3339),
-		Duration:     output.Metadata.CompleteAt.Sub(output.Metadata.StartAt).Round(time.Second).String(),
-		SuccessCount: okCount,
-		ErrorCount:   errorCount,
-		SuccessRate:  fmt.Sprintf("%.2f", successRate),
-		FooterDate:   time.Now().Format("2006-01-02 15:04:05"),
-	}
-
-	// Create template with helper functions
-	funcMap := template.FuncMap{
-		"add": func(a, b int) int {
-			return a + b
-		},
-		"join": func(arr []string, sep string) string {
-			return strings.Join(arr, sep)
-		},
-		"headersPresentCount": func(sh *checker.SecurityHeadersResult) int {
-			count := 0
-			for _, header := range sh.Headers {
-				if header.Present {
-					count++
-				}
-			}
-			return count
-		},
-		"highSeverityMissing": func(sh *checker.SecurityHeadersResult) []string {
-			var missing []string
-			headerNames := []string{
-				"Strict-Transport-Security",
-				"Content-Security-Policy",
-				"X-Content-Type-Options",
-				"X-Frame-Options",
-				"Referrer-Policy",
-				"Permissions-Policy",
-				"Cross-Origin-Opener-Policy",
-				"Cross-Origin-Embedder-Policy",
-			}
-			for _, name := range headerNames {
-				if header, ok := sh.Headers[name]; ok && !header.Present && header.Severity == "high" {
-					missing = append(missing, name)
-				}
-			}
-			return missing
-		},
-		"mediumSeverityMissing": func(sh *checker.SecurityHeadersResult) []string {
-			var missing []string
-			headerNames := []string{
-				"Strict-Transport-Security",
-				"Content-Security-Policy",
-				"X-Content-Type-Options",
-				"X-Frame-Options",
-				"Referrer-Policy",
-				"Permissions-Policy",
-				"Cross-Origin-Opener-Policy",
-				"Cross-Origin-Embedder-Policy",
-			}
-			for _, name := range headerNames {
-				if header, ok := sh.Headers[name]; ok && !header.Present && header.Severity == "medium" {
-					missing = append(missing, name)
-				}
-			}
-			return missing
-		},
-		"hasHighSeverityMissing": func(sh *checker.SecurityHeadersResult) bool {
-			headerNames := []string{
-				"Strict-Transport-Security",
-				"Content-Security-Policy",
-				"X-Content-Type-Options",
-				"X-Frame-Options",
-				"Referrer-Policy",
-				"Permissions-Policy",
-				"Cross-Origin-Opener-Policy",
-				"Cross-Origin-Embedder-Policy",
-			}
-			for _, name := range headerNames {
-				if header, ok := sh.Headers[name]; ok && !header.Present && (header.Severity == "high" || header.Severity == "medium") {
-					return true
-				}
-			}
-			return false
-		},
-	}
-
-	// Parse and execute template
-	tmpl, err := template.New("report").Funcs(funcMap).Parse(markdownTemplate)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse template: %w", err)
-	}
-
-	var buf strings.Builder
-	if err := tmpl.Execute(&buf, data); err != nil {
-		return "", fmt.Errorf("failed to execute template: %w", err)
-	}
-
-	return buf.String(), nil
+	data := buildTemplateData(output, "%.2f")
+	return executeTemplate(markdownReportTemplate, data)
 }
 
 // TemplateData holds the data for HTML template rendering
@@ -241,67 +162,112 @@ type TemplateData struct {
 }
 
 func generateHTMLReport(output *RunOutput) (string, error) {
-	// Calculate summary statistics
-	okCount := 0
-	errorCount := 0
-	for _, r := range output.Results {
+	data := buildTemplateData(output, "%.1f")
+	return executeTemplate(htmlReportTemplate, data)
+}
+
+func addInts(a, b int) int {
+	return a + b
+}
+
+func headersPresentCount(sh *checker.SecurityHeadersResult) int {
+	if sh == nil || sh.Headers == nil {
+		return 0
+	}
+	count := 0
+	for _, header := range sh.Headers {
+		if header.Present {
+			count++
+		}
+	}
+	return count
+}
+
+func missingHighSeverityHeaders(sh *checker.SecurityHeadersResult) []string {
+	return missingHeadersBySeverity(sh, "high")
+}
+
+func missingMediumSeverityHeaders(sh *checker.SecurityHeadersResult) []string {
+	return missingHeadersBySeverity(sh, "medium")
+}
+
+func missingHeadersBySeverity(sh *checker.SecurityHeadersResult, severity string) []string {
+	if sh == nil || sh.Headers == nil {
+		return nil
+	}
+	var missing []string
+	for _, name := range securityHeaderNames {
+		header, ok := sh.Headers[name]
+		if !ok || header.Present {
+			continue
+		}
+		if header.Severity == severity {
+			missing = append(missing, name)
+		}
+	}
+	return missing
+}
+
+func hasCriticalMissingHeaders(sh *checker.SecurityHeadersResult) bool {
+	if sh == nil || sh.Headers == nil {
+		return false
+	}
+	for _, name := range securityHeaderNames {
+		header, ok := sh.Headers[name]
+		if !ok || header.Present {
+			continue
+		}
+		if header.Severity == "high" || header.Severity == "medium" {
+			return true
+		}
+	}
+	return false
+}
+
+func buildTemplateData(output *RunOutput, successRateFmt string) TemplateData {
+	okCount, errorCount := summarizeResults(output.Results)
+	total := len(output.Results)
+	successRate := 0.0
+	if total > 0 {
+		successRate = float64(okCount) / float64(total) * 100
+	}
+
+	now := time.Now()
+	duration := output.Metadata.CompleteAt.Sub(output.Metadata.StartAt)
+	if duration < 0 {
+		duration = 0
+	}
+
+	return TemplateData{
+		Metadata:     output.Metadata,
+		Results:      output.Results,
+		GeneratedAt:  now.Format(time.RFC3339),
+		StartedAt:    output.Metadata.StartAt.Format(time.RFC3339),
+		CompletedAt:  output.Metadata.CompleteAt.Format(time.RFC3339),
+		Duration:     duration.Round(time.Second).String(),
+		SuccessCount: okCount,
+		ErrorCount:   errorCount,
+		SuccessRate:  fmt.Sprintf(successRateFmt, successRate),
+		FooterDate:   now.Format("2006-01-02 15:04:05"),
+	}
+}
+
+func summarizeResults(results []checker.CheckResult) (okCount, errorCount int) {
+	for _, r := range results {
 		if r.Status == "ok" {
 			okCount++
 		} else {
 			errorCount++
 		}
 	}
+	return okCount, errorCount
+}
 
-	// Calculate success rate
-	successRate := 0.0
-	if len(output.Results) > 0 {
-		successRate = float64(okCount) / float64(len(output.Results)) * 100
-	}
-
-	// Prepare template data
-	data := TemplateData{
-		Metadata:     output.Metadata,
-		Results:      output.Results,
-		GeneratedAt:  time.Now().Format(time.RFC3339),
-		StartedAt:    output.Metadata.StartAt.Format(time.RFC3339),
-		CompletedAt:  output.Metadata.CompleteAt.Format(time.RFC3339),
-		Duration:     output.Metadata.CompleteAt.Sub(output.Metadata.StartAt).Round(time.Second).String(),
-		SuccessCount: okCount,
-		ErrorCount:   errorCount,
-		SuccessRate:  fmt.Sprintf("%.1f", successRate),
-		FooterDate:   time.Now().Format("2006-01-02 15:04:05"),
-	}
-
-	// Create template with helper functions
-	funcMap := template.FuncMap{
-		"add": func(a, b int) int {
-			return a + b
-		},
-		"join": func(arr []string, sep string) string {
-			return strings.Join(arr, sep)
-		},
-		"headersPresentCount": func(sh *checker.SecurityHeadersResult) int {
-			count := 0
-			for _, header := range sh.Headers {
-				if header.Present {
-					count++
-				}
-			}
-			return count
-		},
-	}
-
-	// Parse and execute template
-	tmpl, err := template.New("report").Funcs(funcMap).Parse(htmlTemplate)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse template: %w", err)
-	}
-
+func executeTemplate(tmpl *template.Template, data TemplateData) (string, error) {
 	var buf strings.Builder
 	if err := tmpl.Execute(&buf, data); err != nil {
-		return "", fmt.Errorf("failed to execute template: %w", err)
+		return "", fmt.Errorf("failed to execute %s template: %w", tmpl.Name(), err)
 	}
-
 	return buf.String(), nil
 }
 

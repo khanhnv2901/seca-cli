@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	consts "github.com/khanhnv2901/seca-cli/internal/constants"
@@ -81,11 +84,16 @@ var engagementAddScopeCmd = &cobra.Command{
 			return errors.New("--scope must contain one or more hosts/urls")
 		}
 
+		normalizedScope, err := normalizeScopeEntries(add)
+		if err != nil {
+			return err
+		}
+
 		list := loadEngagements()
 		found := false
 		for i := range list {
 			if list[i].ID == id {
-				list[i].Scope = append(list[i].Scope, add...)
+				list[i].Scope = append(list[i].Scope, normalizedScope...)
 				found = true
 				break
 			}
@@ -153,4 +161,107 @@ func saveEngagements(list []Engagement) {
 	if err := os.WriteFile(filePath, b, consts.DefaultFilePerm); err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing engagements file: %v\n", err)
 	}
+}
+
+var allowedScopeSchemes = map[string]struct{}{
+	"http":  {},
+	"https": {},
+}
+
+func normalizeScopeEntries(entries []string) ([]string, error) {
+	out := make([]string, len(entries))
+	for i, entry := range entries {
+		trimmed := strings.TrimSpace(entry)
+		if trimmed == "" {
+			return nil, fmt.Errorf("scope entry %q is empty", entry)
+		}
+		if err := validateScopeEntry(trimmed); err != nil {
+			return nil, fmt.Errorf("invalid scope entry %q: %w", entry, err)
+		}
+		out[i] = trimmed
+	}
+	return out, nil
+}
+
+func validateScopeEntry(entry string) error {
+	if strings.Contains(entry, "://") {
+		return validateURLScope(entry)
+	}
+
+	if net.ParseIP(entry) != nil {
+		return nil
+	}
+
+	if parsed, err := url.Parse("http://" + entry); err == nil && parsed.Host != "" {
+		host := parsed.Hostname()
+		if host == "" {
+			return errors.New("missing hostname")
+		}
+		if !isValidHostOrIP(host) {
+			return fmt.Errorf("invalid host %q", host)
+		}
+		return nil
+	}
+
+	return errors.New("must be a valid http(s) URL or hostname/IP")
+}
+
+func validateURLScope(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("invalid URL: %w", err)
+	}
+
+	if u.Scheme == "" || u.Host == "" {
+		return errors.New("URL must include a scheme and host")
+	}
+
+	if _, ok := allowedScopeSchemes[strings.ToLower(u.Scheme)]; !ok {
+		return fmt.Errorf("unsupported scheme %q (only http/https are allowed)", u.Scheme)
+	}
+
+	host := u.Hostname()
+	if host == "" {
+		return errors.New("URL must include a hostname")
+	}
+
+	if !isValidHostOrIP(host) {
+		return fmt.Errorf("invalid host %q", host)
+	}
+
+	return nil
+}
+
+func isValidHostOrIP(host string) bool {
+	if net.ParseIP(host) != nil {
+		return true
+	}
+	return isValidHostname(host)
+}
+
+func isValidHostname(host string) bool {
+	if host == "" || len(host) > 253 {
+		return false
+	}
+
+	host = strings.TrimSuffix(host, ".")
+	if host == "" {
+		return false
+	}
+
+	labels := strings.Split(host, ".")
+	for _, label := range labels {
+		if len(label) == 0 || len(label) > 63 {
+			return false
+		}
+		if label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, ch := range label {
+			if !(ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch >= '0' && ch <= '9' || ch == '-') {
+				return false
+			}
+		}
+	}
+	return true
 }
