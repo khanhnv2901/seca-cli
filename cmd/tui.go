@@ -60,13 +60,19 @@ func handleAddScope(reader *bufio.Reader, engagements []Engagement) error {
 		return fmt.Errorf("no engagements available")
 	}
 	fmt.Print("Enter engagement ID: ")
-	id, _ := reader.ReadString('\n')
+	id, err := reader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("failed to read engagement ID: %w", err)
+	}
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return fmt.Errorf("ID required")
 	}
 	fmt.Print("Enter scope entries (comma separated): ")
-	scopeLine, _ := reader.ReadString('\n')
+	scopeLine, err := reader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("failed to read scope entries: %w", err)
+	}
 	scopeLine = strings.TrimSpace(scopeLine)
 	if scopeLine == "" {
 		return fmt.Errorf("scope required")
@@ -92,5 +98,5 @@ func showEngagementDetail(reader *bufio.Reader, eng Engagement) {
 		fmt.Printf("ROE   : %s\n", eng.ROE)
 	}
 	fmt.Println("Press Enter to return...")
-	reader.ReadString('\n')
+	_, _ = reader.ReadString('\n')
 }
