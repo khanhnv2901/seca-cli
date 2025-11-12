@@ -21,6 +21,7 @@ type CheckResult struct {
 	SecurityHeaders *SecurityHeadersResult `json:"security_headers,omitempty"`
 	TLSCompliance   *TLSComplianceResult   `json:"tls_compliance,omitempty"`
 	CookieFindings  []CookieFinding        `json:"cookie_findings,omitempty"`
+	CORSInsights    *CORSReport            `json:"cors,omitempty"`
 	Notes           string                 `json:"notes,omitempty"`
 	Error           string                 `json:"error,omitempty"`
 }
@@ -65,6 +66,18 @@ type CookieFinding struct {
 	MissingSecure     bool   `json:"missing_secure"`
 	MissingHTTPOnly   bool   `json:"missing_http_only"`
 	OriginalSetCookie string `json:"set_cookie,omitempty"`
+}
+
+// CORSReport captures Access-Control-Allow-* observations (OWASP A5:2021).
+type CORSReport struct {
+	AllowOrigin        string   `json:"allow_origin"`
+	AllowCredentials   bool     `json:"allow_credentials"`
+	AllowMethods       string   `json:"allow_methods,omitempty"`
+	AllowHeaders       string   `json:"allow_headers,omitempty"`
+	ExposeHeaders      string   `json:"expose_headers,omitempty"`
+	MissingAllowOrigin bool     `json:"missing_allow_origin"`
+	AllowsAnyOrigin    bool     `json:"allows_any_origin"`
+	Issues             []string `json:"issues,omitempty"`
 }
 
 // ComplianceIssue represents a compliance violation

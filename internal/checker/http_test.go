@@ -55,6 +55,29 @@ func TestHTTPChecker_MockServer(t *testing.T) {
 	}
 }
 
+func TestHTTPChecker_CORSDetection(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	}))
+	defer server.Close()
+
+	checker := &HTTPChecker{Timeout: 5 * time.Second}
+	result := checker.Check(context.Background(), server.URL)
+
+	if result.CORSInsights == nil {
+		t.Fatalf("expected CORS insights, got nil")
+	}
+	if !result.CORSInsights.AllowsAnyOrigin {
+		t.Error("expected AllowsAnyOrigin to be true")
+	}
+	if !result.CORSInsights.AllowCredentials {
+		t.Error("expected AllowCredentials to be true")
+	}
+}
+
 func TestHTTPChecker_MockServer_Error(t *testing.T) {
 	// Create HTTP checker
 	checker := &HTTPChecker{

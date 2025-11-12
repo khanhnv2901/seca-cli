@@ -513,6 +513,18 @@ li {
             </table>
         </div>
         {{end}}
+        {{if $result.CORSInsights}}
+        <div class="section">
+            <h4>CORS Policy (OWASP Top 10 A5:2021)</h4>
+            <p><strong>Allow-Origin:</strong> {{if $result.CORSInsights.AllowOrigin}}{{ $result.CORSInsights.AllowOrigin }}{{else}}(missing){{end}}</p>
+            <p><strong>Allows Any Origin:</strong> {{if $result.CORSInsights.AllowsAnyOrigin}}Yes{{else}}No{{end}}</p>
+            <p><strong>Allows Credentials:</strong> {{if $result.CORSInsights.AllowCredentials}}Yes{{else}}No{{end}}</p>
+            {{if $result.CORSInsights.Issues}}
+            <h5>Issues:</h5>
+            <ul>{{range $result.CORSInsights.Issues}}<li>{{.}}</li>{{end}}</ul>
+            {{end}}
+        </div>
+        {{end}}
 
         {{if $result.DNSRecords}}
         <div class="section">

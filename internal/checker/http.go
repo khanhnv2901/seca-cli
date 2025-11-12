@@ -84,6 +84,15 @@ func (h *HTTPChecker) Check(ctx context.Context, target string) CheckResult {
 		result.Notes += fmt.Sprintf("%d cookie(s) missing Secure or HttpOnly flag", len(cookieFindings))
 	}
 
+	// Inspect CORS headers for risky configurations (OWASP Top 10 A5:2021)
+	if corsReport := AnalyzeCORS(resp); corsReport != nil {
+		result.CORSInsights = corsReport
+		if result.Notes != "" {
+			result.Notes += "; "
+		}
+		result.Notes += "CORS policy needs review"
+	}
+
 	// Analyze TLS/crypto compliance (OWASP ASVS §9, PCI DSS 4.1)
 	if resp.TLS != nil {
 		result.TLSCompliance = AnalyzeTLSCompliance(resp.TLS)

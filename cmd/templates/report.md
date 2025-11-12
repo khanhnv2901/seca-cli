@@ -131,6 +131,14 @@
 - **{{.Name}}**: {{if .MissingSecure}}Missing Secure{{end}}{{if and .MissingSecure .MissingHTTPOnly}}, {{end}}{{if .MissingHTTPOnly}}Missing HttpOnly{{end}}{{if .OriginalSetCookie}} (`{{.OriginalSetCookie}}`){{end}}
 {{end}}
 {{end}}
+{{if $result.CORSInsights}}#### CORS Policy (OWASP Top 10 A5:2021)
+- **Allow-Origin:** {{if $result.CORSInsights.AllowOrigin}}{{ $result.CORSInsights.AllowOrigin }}{{else}}(missing){{end}}
+- **Allows Any Origin:** {{if $result.CORSInsights.AllowsAnyOrigin}}Yes{{else}}No{{end}}
+- **Allows Credentials:** {{if $result.CORSInsights.AllowCredentials}}Yes{{else}}No{{end}}
+{{if $result.CORSInsights.Issues}}**Issues:**
+{{range $result.CORSInsights.Issues}}- {{.}}
+{{end}}{{end}}
+{{end}}
 {{if $result.DNSRecords}}#### DNS Records
 {{if index $result.DNSRecords "a_records"}}
 **A Records (IPv4):**
