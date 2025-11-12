@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	consts "github.com/khanhnv2901/seca-cli/internal/constants"
@@ -156,22 +157,7 @@ func (h *HTTPChecker) Check(ctx context.Context, target string) CheckResult {
 
 	// Check for robots.txt (safe, small GET)
 	if parsed != nil {
-		robotsURL := fmt.Sprintf("%s://%s/robots.txt", parsed.Scheme, parsed.Host)
-		robotsReq, err := http.NewRequestWithContext(ctx, "GET", robotsURL, nil)
-		if err == nil {
-			robotsResp, err := client.Do(robotsReq)
-			if err == nil {
-				defer robotsResp.Body.Close()
-				if robotsResp.StatusCode == 200 {
-					if result.Notes != "" {
-						result.Notes += "; robots.txt found"
-					} else {
-						result.Notes = "robots.txt found"
-					}
-				}
-				_, _ = io.Copy(io.Discard, robotsResp.Body)
-			}
-		}
+		checkRobotsAndSitemap(ctx, client, parsed, &result)
 	}
 
 	return result
@@ -180,4 +166,80 @@ func (h *HTTPChecker) Check(ctx context.Context, target string) CheckResult {
 // Name returns the name of this checker
 func (h *HTTPChecker) Name() string {
 	return "check http"
+}
+
+func checkRobotsAndSitemap(ctx context.Context, client *http.Client, parsed *url.URL, result *CheckResult) {
+	base := fmt.Sprintf("%s://%s", parsed.Scheme, parsed.Host)
+	checkRel := func(path string) (*http.Response, error) {
+		req, err := http.NewRequestWithContext(ctx, "GET", base+path, nil)
+		if err != nil {
+			return nil, err
+		}
+		return client.Do(req)
+	}
+
+	robotsResp, err := checkRel("/robots.txt")
+	if err == nil {
+		defer robotsResp.Body.Close()
+		if robotsResp.StatusCode == http.StatusOK {
+			if result.Notes != "" {
+				result.Notes += "; robots.txt found"
+			} else {
+				result.Notes = "robots.txt found"
+			}
+			body, _ := io.ReadAll(io.LimitReader(robotsResp.Body, 4096))
+			result.SecurityHeaders = result.SecurityHeaders // placeholder: future integration
+			_ = body
+		}
+		_, _ = io.Copy(io.Discard, robotsResp.Body)
+	}
+
+	sitemapResp, err := checkRel("/sitemap.xml")
+	if err == nil {
+		defer sitemapResp.Body.Close()
+		if sitemapResp.StatusCode == http.StatusOK {
+			body, _ := io.ReadAll(io.LimitReader(sitemapResp.Body, 20480))
+			discovered := analyzeSitemapURLs(string(body))
+			if len(discovered) > 0 {
+				if result.Notes != "" {
+					result.Notes += "; sitemap discovered"
+				} else {
+					result.Notes = "sitemap discovered"
+				}
+				if result.SecurityHeaders == nil {
+					result.SecurityHeaders = &SecurityHeadersResult{}
+				}
+			}
+			addSitemapNote(result, discovered)
+		}
+		_, _ = io.Copy(io.Discard, sitemapResp.Body)
+	}
+}
+
+func analyzeSitemapURLs(data string) []string {
+	lines := strings.Split(data, "\n")
+	urls := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "<loc>") && strings.HasSuffix(line, "</loc>") {
+			urls = append(urls, strings.TrimSuffix(strings.TrimPrefix(line, "<loc>"), "</loc>"))
+		}
+	}
+	return urls
+}
+
+func addSitemapNote(result *CheckResult, urls []string) {
+	if len(urls) == 0 {
+		return
+	}
+	preview := urls
+	if len(preview) > 5 {
+		preview = preview[:5]
+	}
+	note := fmt.Sprintf("sitemap exposes %d URL(s), sample: %s", len(urls), strings.Join(preview, ", "))
+	if result.Notes != "" {
+		result.Notes += "; " + note
+	} else {
+		result.Notes = note
+	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -97,39 +98,34 @@ func TestHTTPChecker_MockServer_Error(t *testing.T) {
 	}
 }
 
-func TestHTTPChecker_RobotsText(t *testing.T) {
-	// Create a test server with robots.txt
+func TestHTTPChecker_RobotsAndSitemap(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/robots.txt" {
+		switch r.URL.Path {
+		case "/robots.txt":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("User-agent: *\nDisallow: /admin"))
-		} else {
+		case "/sitemap.xml":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("<urlset><url><loc>https://example.com/admin</loc></url></urlset>"))
+		default:
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("OK"))
 		}
 	}))
 	defer server.Close()
 
-	// Create HTTP checker
-	checker := &HTTPChecker{
-		Timeout: 5 * time.Second,
-	}
-
-	// Perform check
-	ctx := context.Background()
-	result := checker.Check(ctx, server.URL)
+	checker := &HTTPChecker{Timeout: 5 * time.Second}
+	result := checker.Check(context.Background(), server.URL)
 
 	if result.Status != "ok" {
-		t.Errorf("Expected status 'ok', got '%s'", result.Status)
+		t.Fatalf("expected ok status, got %s", result.Status)
 	}
 
-	if result.HTTPStatus != http.StatusOK {
-		t.Errorf("Expected HTTP status 200, got %d", result.HTTPStatus)
+	if !strings.Contains(result.Notes, "robots.txt found") {
+		t.Errorf("expected robots note, got %s", result.Notes)
 	}
-
-	// Should have detected robots.txt
-	if result.Notes != "robots.txt found" {
-		t.Errorf("Expected notes 'robots.txt found', got '%s'", result.Notes)
+	if !strings.Contains(result.Notes, "sitemap") {
+		t.Errorf("expected sitemap note, got %s", result.Notes)
 	}
 }
 

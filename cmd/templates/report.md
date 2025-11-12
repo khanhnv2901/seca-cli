@@ -139,6 +139,8 @@
 {{range $result.CORSInsights.Issues}}- {{.}}
 {{end}}{{end}}
 {{end}}
+{{if $result.Notes}}**Notes:** {{.Notes}}
+{{end}}
 {{if $result.DNSRecords}}#### DNS Records
 {{if index $result.DNSRecords "a_records"}}
 **A Records (IPv4):**

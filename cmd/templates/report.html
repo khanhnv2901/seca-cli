@@ -523,6 +523,13 @@ li {
             <h5>Issues:</h5>
             <ul>{{range $result.CORSInsights.Issues}}<li>{{.}}</li>{{end}}</ul>
             {{end}}
+            {{if $result.Notes}}<p><strong>Notes:</strong> {{ $result.Notes }}</p>{{end}}
+        </div>
+        {{end}}
+        {{if $result.Notes}}
+        <div class="section">
+            <h4>Additional Notes</h4>
+            <p>{{ $result.Notes }}</p>
         </div>
         {{end}}
 
