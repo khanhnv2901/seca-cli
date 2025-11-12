@@ -33,13 +33,13 @@ type RunOutput struct {
 }
 
 var (
-	concurrency    int
-	rateLimit      int // requests per second
-	timeoutSecs    int
-	auditAppendRaw bool
-	retentionDays  int
-	autoSign       bool
-	gpgKey         string
+	concurrency      int
+	rateLimit        int // requests per second
+	timeoutSecs      int
+	auditAppendRaw   bool
+	retentionDays    int
+	autoSign         bool
+	gpgKey           string
 	telemetryEnabled bool
 )
 
@@ -471,4 +471,5 @@ func init() {
 
 	checkCmd.AddCommand(checkHTTPCmd)
 	checkCmd.AddCommand(checkDNSCmd)
+	registerPluginCommands()
 }
