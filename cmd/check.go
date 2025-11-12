@@ -9,8 +9,10 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/khanhnv2901/seca-cli/internal/checker"
@@ -207,6 +209,10 @@ func runCheckCommand(cmd *cobra.Command, config checkConfig) error {
 	if err != nil {
 		return err
 	}
+	retryCount := runtimeCfg.RetryCount
+	if retryCount < 0 {
+		retryCount = 0
+	}
 
 	// Parse flags
 	params := checkParams{
@@ -229,6 +235,22 @@ func runCheckCommand(cmd *cobra.Command, config checkConfig) error {
 	if runtimeCfg.SecureResults && runtimeCfg.GPGKey == "" {
 		return fmt.Errorf("--secure-results requires --gpg-key")
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
+
+	go func() {
+		select {
+		case sig := <-sigCh:
+			fmt.Printf("\n%s Received %s, finalizing partial results...\n", colorWarn("!"), sig.String())
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
 
 	// Load engagement
 	eng, err := loadEngagementByID(params.ID)
@@ -269,18 +291,67 @@ func runCheckCommand(cmd *cobra.Command, config checkConfig) error {
 		}
 	}
 
-	// Create runner and execute checks
+	// Create runner
 	runner := &checker.Runner{
 		Concurrency: runtimeCfg.Concurrency,
 		RateLimit:   runtimeCfg.RateLimit,
 		Timeout:     time.Duration(config.TimeoutSecs) * time.Second,
 	}
 
-	ctx := context.Background()
-	results := runner.RunChecks(ctx, eng.Scope, chk, auditFn)
+	targetOrder := append([]string(nil), eng.Scope...)
+	pending := append([]string(nil), targetOrder...)
+	finalResults := make(map[string]checker.CheckResult, len(targetOrder))
+	maxAttempts := retryCount + 1
+	if maxAttempts <= 0 {
+		maxAttempts = 1
+	}
+
+	for attempt := 1; attempt <= maxAttempts && len(pending) > 0; attempt++ {
+		attemptTargets := append([]string(nil), pending...)
+		attemptResults := runner.RunChecks(ctx, attemptTargets, chk, auditFn)
+
+		resultMap := make(map[string]checker.CheckResult, len(attemptResults))
+		for _, res := range attemptResults {
+			resultMap[res.Target] = res
+		}
+
+		nextPending := make([]string, 0)
+		for _, target := range pending {
+			if res, ok := resultMap[target]; ok {
+				finalResults[target] = res
+				if ctx.Err() == nil && !strings.EqualFold(res.Status, "ok") && attempt < maxAttempts {
+					nextPending = append(nextPending, target)
+				}
+			} else if ctx.Err() == nil && attempt < maxAttempts {
+				nextPending = append(nextPending, target)
+			}
+		}
+
+		if ctx.Err() != nil {
+			break
+		}
+
+		if len(nextPending) > 0 && attempt < maxAttempts {
+			fmt.Printf("%s retrying %d target(s) (attempt %d/%d)\n", colorWarn("Retrying"), len(nextPending), attempt+1, maxAttempts)
+		}
+		pending = nextPending
+	}
 
 	if progress != nil {
 		progress.Stop()
+	}
+
+	if ctx.Err() != nil {
+		fmt.Printf("\n%s Run cancelled. Writing partial results...\n", colorWarn("!"))
+	} else if len(pending) > 0 {
+		fmt.Printf("%s %d target(s) still failing after %d attempt(s).\n", colorWarn("Retries exhausted."), len(pending), maxAttempts)
+	}
+
+	results := make([]checker.CheckResult, 0, len(finalResults))
+	for _, target := range targetOrder {
+		if res, ok := finalResults[target]; ok {
+			results = append(results, res)
+		}
 	}
 
 	// Write results and compute hashes
@@ -439,6 +510,9 @@ func writeResultsAndHash(appCtx *AppContext, id string, resultsFilename string, 
 
 	// Compute hash for audit.csv
 	auditPath = filepath.Join(dir, "audit.csv")
+	if err := ensureAuditFile(auditPath); err != nil {
+		return "", "", "", "", fmt.Errorf("failed to initialize audit file: %w", err)
+	}
 	auditHash, err = HashFile(auditPath, hashAlgo)
 	if err != nil {
 		return "", "", "", "", fmt.Errorf("failed to hash audit file: %w", err)
@@ -572,6 +646,7 @@ func init() {
 	checkCmd.PersistentFlags().BoolVar(&cliConfig.Check.ProgressEnabled, "progress", cliConfig.Check.ProgressEnabled, "Display live progress for checks")
 	checkCmd.PersistentFlags().StringVar(&cliConfig.Check.HashAlgorithm, "hash", cliConfig.Check.HashAlgorithm, "Hash algorithm for integrity verification (sha256|sha512)")
 	checkCmd.PersistentFlags().BoolVar(&cliConfig.Check.SecureResults, "secure-results", cliConfig.Check.SecureResults, "Encrypt audit logs with operator GPG key after run")
+	checkCmd.PersistentFlags().IntVar(&cliConfig.Check.RetryCount, "retry", cliConfig.Check.RetryCount, "Number of times to retry failed targets")
 
 	// HTTP-specific flags
 	addCommonCheckFlags(checkHTTPCmd)

@@ -40,6 +40,7 @@ type CheckRuntimeConfig struct {
 	ProgressEnabled  bool
 	HashAlgorithm    string
 	SecureResults    bool
+	RetryCount       int
 	DNS              DNSConfig
 }
 

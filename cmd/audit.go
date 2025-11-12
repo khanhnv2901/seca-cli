@@ -194,3 +194,28 @@ func (h HashAlgorithm) newHasher() (hash.Hash, error) {
 		return nil, fmt.Errorf("unsupported hash algorithm %q", h)
 	}
 }
+
+func ensureAuditFile(path string) error {
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(path), consts.DefaultDirPerm); err != nil {
+		return err
+	}
+
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, consts.DefaultFilePerm)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	writer := csv.NewWriter(f)
+	if err := writer.Write(auditHeader); err != nil {
+		return err
+	}
+	writer.Flush()
+	return writer.Error()
+}
