@@ -29,11 +29,13 @@ func TestRecordTelemetry_WritesMetrics(t *testing.T) {
 		Config:     newCLIConfig(),
 	}
 
-	if err := recordTelemetry(appCtx, "eng-123", "check http", results, 3*time.Second); err != nil {
+	const engagementID = "eng-123"
+
+	if err := recordTelemetry(appCtx, engagementID, "check http", results, 3*time.Second); err != nil {
 		t.Fatalf("recordTelemetry returned error: %v", err)
 	}
 
-	path := filepath.Join(env.AppCtx.ResultsDir, "telemetry.jsonl")
+	path := filepath.Join(env.AppCtx.ResultsDir, engagementID, "telemetry.jsonl")
 	f, err := os.Open(path)
 	if err != nil {
 		t.Fatalf("failed to open telemetry file: %v", err)
@@ -50,7 +52,7 @@ func TestRecordTelemetry_WritesMetrics(t *testing.T) {
 		t.Fatalf("failed to unmarshal record: %v", err)
 	}
 
-	if rec.EngagementID != "eng-123" {
+	if rec.EngagementID != engagementID {
 		t.Errorf("expected engagement_id eng-123, got %s", rec.EngagementID)
 	}
 
@@ -72,7 +74,13 @@ func TestLoadTelemetryHistory(t *testing.T) {
 	env := testutil.NewTestEnv(t)
 	defer env.Cleanup()
 
-	path := filepath.Join(env.AppCtx.ResultsDir, "telemetry.jsonl")
+	engagementID := "eng-1"
+	dir := filepath.Join(env.AppCtx.ResultsDir, engagementID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("failed to create engagement dir: %v", err)
+	}
+
+	path := filepath.Join(dir, "telemetry.jsonl")
 	f, err := os.Create(path)
 	if err != nil {
 		t.Fatalf("failed to create telemetry file: %v", err)
@@ -91,7 +99,7 @@ func TestLoadTelemetryHistory(t *testing.T) {
 	}
 	f.Close()
 
-	history, err := loadTelemetryHistory(env.AppCtx.ResultsDir, "eng-1", 2)
+	history, err := loadTelemetryHistory(env.AppCtx.ResultsDir, engagementID, 2)
 	if err != nil {
 		t.Fatalf("loadTelemetryHistory returned error: %v", err)
 	}

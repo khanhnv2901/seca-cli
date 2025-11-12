@@ -179,6 +179,10 @@ func checkHSTS(value string) (int, []string, string) {
 		recommendation = "Excellent HSTS configuration"
 	}
 
+	if score < 0 {
+		score = 0
+	}
+
 	return score, issues, recommendation
 }
 

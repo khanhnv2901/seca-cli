@@ -24,9 +24,9 @@ type HTTPChecker struct {
 const bodySnippetLimit = 32768
 
 // Check performs an HTTP/HTTPS check on the target
-func (h *HTTPChecker) Check(ctx context.Context, target string) CheckResult {
+func (h *HTTPChecker) Check(ctx context.Context, target string) (result CheckResult) {
 	startTime := time.Now()
-	result := CheckResult{
+	result = CheckResult{
 		Target:     target,
 		CheckedAt:  time.Now().UTC(),
 		DNSRecords: make(map[string]interface{}),

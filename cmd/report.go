@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -438,6 +439,32 @@ func executeTemplate(tmpl *template.Template, data TemplateData) (string, error)
 	return buf.String(), nil
 }
 
+func printTelemetryASCII(records []TelemetryRecord) {
+	const barWidth = 40
+	fmt.Println("Telemetry Success Rate Trend")
+	for _, rec := range records {
+		barLen := int(math.Round((rec.SuccessRate / 100.0) * barWidth))
+		if barLen < 0 {
+			barLen = 0
+		}
+		if barLen > barWidth {
+			barLen = barWidth
+		}
+		if barLen == 0 && rec.SuccessRate > 0 {
+			barLen = 1
+		}
+		bar := strings.Repeat("#", barLen)
+		fmt.Printf("%s | %6.2f%% | %-*s | %s (%d targets)\n",
+			rec.Timestamp.Format("2006-01-02 15:04"),
+			rec.SuccessRate,
+			barWidth,
+			bar,
+			rec.Command,
+			rec.TargetCount,
+		)
+	}
+}
+
 var reportStatsCmd = &cobra.Command{
 	Use:   "stats",
 	Short: "Show analytics summary for engagement",
@@ -476,10 +503,54 @@ var reportStatsCmd = &cobra.Command{
 	},
 }
 
+var reportTelemetryCmd = &cobra.Command{
+	Use:   "telemetry",
+	Short: "Graph telemetry success rate trend for an engagement",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		appCtx := getAppContext(cmd)
+
+		id, _ := cmd.Flags().GetString("id")
+		format, _ := cmd.Flags().GetString("format")
+		limit, _ := cmd.Flags().GetInt("limit")
+
+		if id == "" {
+			return fmt.Errorf("--id is required")
+		}
+
+		history, err := loadTelemetryHistory(appCtx.ResultsDir, id, limit)
+		if err != nil {
+			return err
+		}
+		if len(history) == 0 {
+			fmt.Printf("No telemetry records found for engagement %s\n", id)
+			return nil
+		}
+
+		switch strings.ToLower(format) {
+		case "json":
+			out, err := json.MarshalIndent(history, jsonPrefix, jsonIndent)
+			if err != nil {
+				return fmt.Errorf("marshal telemetry: %w", err)
+			}
+			fmt.Println(string(out))
+		case "ascii":
+			printTelemetryASCII(history)
+		default:
+			return fmt.Errorf("unsupported format %s (use ascii or json)", format)
+		}
+
+		return nil
+	},
+}
+
 func init() {
 	reportGenerateCmd.Flags().String("id", "", "Engagement ID")
 	reportGenerateCmd.Flags().String("format", "md", "Output format: json|md|html|pdf")
 	reportStatsCmd.Flags().String("id", "", "Engagement ID")
+	reportTelemetryCmd.Flags().String("id", "", "Engagement ID")
+	reportTelemetryCmd.Flags().String("format", "ascii", "Output format: ascii|json")
+	reportTelemetryCmd.Flags().Int("limit", 10, "Number of recent runs to display")
 	reportCmd.AddCommand(reportGenerateCmd)
 	reportCmd.AddCommand(reportStatsCmd)
+	reportCmd.AddCommand(reportTelemetryCmd)
 }

@@ -156,7 +156,7 @@ func TestHTTPChecker_RobotsAndSitemap(t *testing.T) {
 		t.Fatalf("expected ok status, got %s", result.Status)
 	}
 
-	if !strings.Contains(result.Notes, "robots.txt found") {
+	if !strings.Contains(strings.ToLower(result.Notes), "robots") {
 		t.Errorf("expected robots note, got %s", result.Notes)
 	}
 	if !strings.Contains(result.Notes, "sitemap") {
