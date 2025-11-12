@@ -8,10 +8,11 @@
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     line-height: 1.6;
-    max-width: 1200px;
+    max-width: 1400px;
     margin: 0 auto;
     padding: 20px;
     background-color: #f5f5f5;
+    color: #333;
 }
 .container {
     background-color: white;
@@ -29,6 +30,17 @@ h2 {
     margin-top: 30px;
     border-left: 4px solid #3498db;
     padding-left: 10px;
+}
+h3 {
+    color: #2c3e50;
+    margin-top: 25px;
+    border-bottom: 2px solid #ecf0f1;
+    padding-bottom: 8px;
+}
+h4 {
+    color: #34495e;
+    margin-top: 20px;
+    margin-bottom: 10px;
 }
 .metadata {
     background-color: #ecf0f1;
@@ -103,6 +115,7 @@ tr:hover {
     background-color: #f4f4f4;
     padding: 2px 6px;
     border-radius: 3px;
+    font-size: 0.9em;
 }
 .footer {
     margin-top: 40px;
@@ -111,6 +124,94 @@ tr:hover {
     text-align: center;
     color: #7f8c8d;
     font-size: 0.9em;
+}
+.target-detail {
+    margin: 30px 0;
+    padding: 20px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+    border-left: 4px solid #3498db;
+}
+.section {
+    margin: 20px 0;
+    padding: 15px;
+    background-color: white;
+    border-radius: 5px;
+    border: 1px solid #e0e0e0;
+}
+.grade-badge {
+    display: inline-block;
+    padding: 5px 15px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 1.2em;
+}
+.grade-A { background-color: #28a745; color: white; }
+.grade-B { background-color: #5cb85c; color: white; }
+.grade-C { background-color: #ffc107; color: #333; }
+.grade-D { background-color: #ff851b; color: white; }
+.grade-F { background-color: #dc3545; color: white; }
+.compliant-yes {
+    color: #28a745;
+    font-weight: bold;
+}
+.compliant-no {
+    color: #dc3545;
+    font-weight: bold;
+}
+.header-present {
+    color: #28a745;
+}
+.header-missing {
+    color: #dc3545;
+}
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 10px;
+    margin: 15px 0;
+}
+.info-item {
+    padding: 8px;
+    background-color: #f8f9fa;
+    border-radius: 3px;
+}
+.info-label {
+    font-weight: 600;
+    color: #495057;
+}
+.warning {
+    background-color: #fff3cd;
+    border-left: 4px solid #ffc107;
+    padding: 10px 15px;
+    margin: 10px 0;
+    border-radius: 3px;
+}
+.recommendation {
+    background-color: #d1ecf1;
+    border-left: 4px solid #17a2b8;
+    padding: 10px 15px;
+    margin: 10px 0;
+    border-radius: 3px;
+}
+ul {
+    margin: 10px 0;
+    padding-left: 25px;
+}
+li {
+    margin: 5px 0;
+}
+.cert-chain {
+    background-color: #f8f9fa;
+    padding: 10px;
+    border-radius: 3px;
+    margin: 10px 0;
+}
+.cert-chain-item {
+    padding: 5px 10px;
+    margin: 3px 0;
+    background-color: white;
+    border-left: 3px solid #3498db;
 }
     </style>
 </head>
@@ -150,7 +251,7 @@ tr:hover {
         </div>
     </div>
 
-    <h2>Results</h2>
+    <h2>Results Overview</h2>
     <table>
         <thead>
         <tr>
@@ -160,7 +261,6 @@ tr:hover {
             <th>Server</th>
             <th>TLS Expiry</th>
             <th>Notes</th>
-            <th>Error</th>
         </tr>
         </thead>
         <tbody>
@@ -172,11 +272,191 @@ tr:hover {
             <td>{{.ServerHeader}}</td>
             <td>{{.TLSExpiry}}</td>
             <td>{{if .Notes}}{{.Notes}}{{else}}-{{end}}</td>
-            <td>{{if .Error}}{{.Error}}{{else}}-{{end}}</td>
         </tr>
         {{end}}
         </tbody>
     </table>
+
+    <h2>Detailed Security Analysis</h2>
+
+    {{range $index, $result := .Results}}
+    <div class="target-detail">
+        <h3>{{add $index 1}}. {{$result.Target}}</h3>
+
+        <div class="section">
+            <h4>Basic Information</h4>
+            <div class="info-grid">
+                <div class="info-item"><span class="info-label">Status:</span> <span class="{{if eq $result.Status "ok"}}status-ok{{else}}status-error{{end}}">{{$result.Status}}</span></div>
+                {{if $result.HTTPStatus}}<div class="info-item"><span class="info-label">HTTP Status:</span> {{$result.HTTPStatus}}</div>{{end}}
+                {{if $result.ServerHeader}}<div class="info-item"><span class="info-label">Server:</span> {{$result.ServerHeader}}</div>{{end}}
+                {{if gt $result.ResponseTime 0.0}}<div class="info-item"><span class="info-label">Response Time:</span> {{printf "%.2f" $result.ResponseTime}} ms</div>{{end}}
+                {{if $result.Notes}}<div class="info-item"><span class="info-label">Notes:</span> {{$result.Notes}}</div>{{end}}
+            </div>
+            {{if $result.Error}}
+            <div class="warning"><strong>Error:</strong> {{$result.Error}}</div>
+            {{end}}
+        </div>
+
+        {{if $result.SecurityHeaders}}
+        <div class="section">
+            <h4>Security Headers Analysis</h4>
+            <p>
+                <strong>Overall Score:</strong> {{$result.SecurityHeaders.Score}}/{{$result.SecurityHeaders.MaxScore}}
+                <span class="grade-badge grade-{{$result.SecurityHeaders.Grade}}">Grade: {{$result.SecurityHeaders.Grade}}</span>
+            </p>
+            <p><strong>Headers Present:</strong> {{headersPresentCount $result.SecurityHeaders}}/8 | <strong>Headers Missing:</strong> {{len $result.SecurityHeaders.Missing}}</p>
+
+            <h5>Header Details:</h5>
+            <ul>
+                {{range $name, $header := $result.SecurityHeaders.Headers}}
+                <li>
+                    {{if $header.Present}}
+                    <span class="header-present">✅ <strong>{{$name}}</strong></span> (Score: {{$header.Score}}/{{$header.MaxScore}})
+                    {{if $header.Value}}<br>&nbsp;&nbsp;&nbsp;&nbsp;Value: <span class="code">{{$header.Value}}</span>{{end}}
+                    {{if $header.Issues}}
+                    <ul>
+                        {{range $header.Issues}}<li>⚠️ {{.}}</li>{{end}}
+                    </ul>
+                    {{end}}
+                    {{else}}
+                    <span class="header-missing">❌ <strong>{{$name}}</strong></span> (Score: {{$header.Score}}/{{$header.MaxScore}}, Severity: {{$header.Severity}})
+                    {{if $header.Recommendation}}<br>&nbsp;&nbsp;&nbsp;&nbsp;💡 {{$header.Recommendation}}{{end}}
+                    {{end}}
+                </li>
+                {{end}}
+            </ul>
+
+            {{if $result.SecurityHeaders.Warnings}}
+            <h5>Warnings:</h5>
+            {{range $result.SecurityHeaders.Warnings}}
+            <div class="warning">⚠️ {{.}}</div>
+            {{end}}
+            {{end}}
+        </div>
+        {{end}}
+
+        {{if $result.TLSCompliance}}
+        <div class="section">
+            <h4>TLS Compliance Analysis</h4>
+            <p>
+                <strong>Overall Status:</strong>
+                {{if $result.TLSCompliance.Compliant}}
+                <span class="compliant-yes">✅ COMPLIANT</span>
+                {{else}}
+                <span class="compliant-no">❌ NON-COMPLIANT</span>
+                {{end}}
+            </p>
+
+            <h5>Configuration:</h5>
+            <div class="info-grid">
+                <div class="info-item"><span class="info-label">TLS Version:</span> {{$result.TLSCompliance.TLSVersion}}</div>
+                <div class="info-item"><span class="info-label">Cipher Suite:</span> <span class="code">{{$result.TLSCompliance.CipherSuite}}</span></div>
+            </div>
+
+            <h5>Standards Compliance:</h5>
+            <ul>
+                <li>
+                    {{if $result.TLSCompliance.Standards.OWASPASVS9.Compliant}}✅{{else}}❌{{end}}
+                    <strong>OWASP ASVS v9</strong> (Level: {{$result.TLSCompliance.Standards.OWASPASVS9.Level}})
+                    {{if $result.TLSCompliance.Standards.OWASPASVS9.Passed}}
+                    <br>&nbsp;&nbsp;&nbsp;&nbsp;Passed Controls: {{join $result.TLSCompliance.Standards.OWASPASVS9.Passed ", "}}
+                    {{end}}
+                    {{if $result.TLSCompliance.Standards.OWASPASVS9.Failed}}
+                    <br>&nbsp;&nbsp;&nbsp;&nbsp;Failed Controls: {{join $result.TLSCompliance.Standards.OWASPASVS9.Failed ", "}}
+                    {{end}}
+                </li>
+                <li>
+                    {{if $result.TLSCompliance.Standards.PCIDSS41.Compliant}}✅{{else}}❌{{end}}
+                    <strong>PCI DSS 4.1</strong>
+                    {{if $result.TLSCompliance.Standards.PCIDSS41.Passed}}
+                    <br>&nbsp;&nbsp;&nbsp;&nbsp;Passed Controls: {{join $result.TLSCompliance.Standards.PCIDSS41.Passed ", "}}
+                    {{end}}
+                    {{if $result.TLSCompliance.Standards.PCIDSS41.Failed}}
+                    <br>&nbsp;&nbsp;&nbsp;&nbsp;Failed Controls: {{join $result.TLSCompliance.Standards.PCIDSS41.Failed ", "}}
+                    {{end}}
+                </li>
+                <li>
+                    {{if $result.TLSCompliance.Standards.NIST80052r2.Compliant}}✅{{else}}❌{{end}}
+                    <strong>NIST SP 800-52r2</strong> (Level: {{$result.TLSCompliance.Standards.NIST80052r2.Level}})
+                    {{if $result.TLSCompliance.Standards.NIST80052r2.Passed}}
+                    <br>&nbsp;&nbsp;&nbsp;&nbsp;Passed Controls: {{join $result.TLSCompliance.Standards.NIST80052r2.Passed ", "}}
+                    {{end}}
+                    {{if $result.TLSCompliance.Standards.NIST80052r2.Failed}}
+                    <br>&nbsp;&nbsp;&nbsp;&nbsp;Failed Controls: {{join $result.TLSCompliance.Standards.NIST80052r2.Failed ", "}}
+                    {{end}}
+                </li>
+            </ul>
+
+            {{if $result.TLSCompliance.CertificateInfo}}
+            <h5>Certificate Information:</h5>
+            <div class="info-grid">
+                <div class="info-item"><span class="info-label">Subject:</span> {{$result.TLSCompliance.CertificateInfo.Subject}}</div>
+                <div class="info-item"><span class="info-label">Issuer:</span> {{$result.TLSCompliance.CertificateInfo.Issuer}}</div>
+                <div class="info-item"><span class="info-label">Valid From:</span> {{$result.TLSCompliance.CertificateInfo.NotBefore}}</div>
+                <div class="info-item"><span class="info-label">Valid Until:</span> {{$result.TLSCompliance.CertificateInfo.NotAfter}}</div>
+                <div class="info-item"><span class="info-label">Days Until Expiry:</span> {{$result.TLSCompliance.CertificateInfo.DaysUntilExpiry}}</div>
+                <div class="info-item"><span class="info-label">Self-Signed:</span> {{$result.TLSCompliance.CertificateInfo.SelfSigned}}</div>
+                <div class="info-item"><span class="info-label">Valid Chain:</span> {{$result.TLSCompliance.CertificateInfo.ValidChain}}</div>
+                <div class="info-item"><span class="info-label">Signature Algorithm:</span> {{$result.TLSCompliance.CertificateInfo.SignatureAlg}}</div>
+                <div class="info-item"><span class="info-label">Public Key Algorithm:</span> {{$result.TLSCompliance.CertificateInfo.PublicKeyAlg}}</div>
+                <div class="info-item"><span class="info-label">Key Size:</span> {{$result.TLSCompliance.CertificateInfo.KeySize}} bits</div>
+                <div class="info-item"><span class="info-label">Chain Depth:</span> {{$result.TLSCompliance.CertificateInfo.ChainDepth}}</div>
+            </div>
+
+            {{if $result.TLSCompliance.CertificateInfo.DNSNames}}
+            <p><strong>DNS Names:</strong> {{join $result.TLSCompliance.CertificateInfo.DNSNames ", "}}</p>
+            {{end}}
+
+            {{if $result.TLSCompliance.CertificateInfo.ChainSubjects}}
+            <div class="cert-chain">
+                <strong>Certificate Chain:</strong>
+                {{range $i, $subject := $result.TLSCompliance.CertificateInfo.ChainSubjects}}
+                <div class="cert-chain-item">{{add $i 1}}. {{$subject}}</div>
+                {{end}}
+            </div>
+            {{end}}
+            {{end}}
+
+            {{if $result.TLSCompliance.Recommendations}}
+            <h5>Recommendations:</h5>
+            {{range $result.TLSCompliance.Recommendations}}
+            <div class="recommendation">💡 {{.}}</div>
+            {{end}}
+            {{end}}
+        </div>
+        {{end}}
+
+        {{if $result.DNSRecords}}
+        <div class="section">
+            <h4>DNS Records</h4>
+            {{if index $result.DNSRecords "a_records"}}
+            <p><strong>A Records (IPv4):</strong></p>
+            <ul>{{range index $result.DNSRecords "a_records"}}<li>{{.}}</li>{{end}}</ul>
+            {{end}}
+            {{if index $result.DNSRecords "aaaa_records"}}
+            <p><strong>AAAA Records (IPv6):</strong></p>
+            <ul>{{range index $result.DNSRecords "aaaa_records"}}<li>{{.}}</li>{{end}}</ul>
+            {{end}}
+            {{if index $result.DNSRecords "cname_records"}}
+            <p><strong>CNAME Records:</strong></p>
+            <ul>{{range index $result.DNSRecords "cname_records"}}<li>{{.}}</li>{{end}}</ul>
+            {{end}}
+            {{if index $result.DNSRecords "mx_records"}}
+            <p><strong>MX Records (Mail Servers):</strong></p>
+            <ul>{{range index $result.DNSRecords "mx_records"}}<li>{{.}}</li>{{end}}</ul>
+            {{end}}
+            {{if index $result.DNSRecords "ns_records"}}
+            <p><strong>NS Records (Name Servers):</strong></p>
+            <ul>{{range index $result.DNSRecords "ns_records"}}<li>{{.}}</li>{{end}}</ul>
+            {{end}}
+            {{if index $result.DNSRecords "txt_records"}}
+            <p><strong>TXT Records:</strong></p>
+            <ul>{{range index $result.DNSRecords "txt_records"}}<li>{{.}}</li>{{end}}</ul>
+            {{end}}
+        </div>
+        {{end}}
+    </div>
+    {{end}}
 
     <div class="footer">
         Report generated by seca-cli on {{.FooterDate}}
