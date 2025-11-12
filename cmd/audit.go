@@ -2,12 +2,15 @@ package cmd
 
 import (
 	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/csv"
 	"encoding/hex"
 	"fmt"
+	"hash"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	consts "github.com/khanhnv2901/seca-cli/internal/constants"
@@ -113,22 +116,81 @@ func SaveRawCapture(resultsDir string, engamentID, target string, headers map[st
 
 // HashFileSHA256 computes and writes a .sha256 companion file
 func HashFileSHA256(path string) (string, error) {
+	return HashFile(path, HashAlgorithmSHA256)
+}
+
+// HashFile computes and writes a companion file for the given algorithm.
+func HashFile(path string, algorithm HashAlgorithm) (string, error) {
+	hasher, err := algorithm.newHasher()
+	if err != nil {
+		return "", err
+	}
+
 	f, err := os.Open(path)
 	if err != nil {
 		return "", err
 	}
 	defer f.Close()
 
-	h := sha256.New()
-
-	if _, err := io.Copy(h, f); err != nil {
+	if _, err := io.Copy(hasher, f); err != nil {
 		return "", err
 	}
-	sum := hex.EncodeToString(h.Sum(nil))
-	hashPath := path + ".sha256"
+
+	sum := hex.EncodeToString(hasher.Sum(nil))
+	hashPath := path + algorithm.FileExtension()
 	content := fmt.Sprintf("%s  %s\n", sum, filepath.Base(path))
 	if err := os.WriteFile(hashPath, []byte(content), consts.DefaultFilePerm); err != nil {
 		return "", err
 	}
 	return sum, nil
+}
+
+// HashAlgorithm represents supported hashing algorithms for integrity files.
+type HashAlgorithm string
+
+const (
+	HashAlgorithmSHA256 HashAlgorithm = "sha256"
+	HashAlgorithmSHA512 HashAlgorithm = "sha512"
+)
+
+// ParseHashAlgorithm normalizes and validates the requested algorithm.
+func ParseHashAlgorithm(raw string) (HashAlgorithm, error) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "sha256", "":
+		return HashAlgorithmSHA256, nil
+	case "sha512":
+		return HashAlgorithmSHA512, nil
+	default:
+		return "", fmt.Errorf("unsupported hash algorithm %q (use sha256 or sha512)", raw)
+	}
+}
+
+func (h HashAlgorithm) String() string {
+	if h == "" {
+		return string(HashAlgorithmSHA256)
+	}
+	return string(h)
+}
+
+func (h HashAlgorithm) DisplayName() string {
+	return strings.ToUpper(h.String())
+}
+
+func (h HashAlgorithm) FileExtension() string {
+	return "." + h.String()
+}
+
+func (h HashAlgorithm) SumCommand() string {
+	return fmt.Sprintf("%ssum", h.String())
+}
+
+func (h HashAlgorithm) newHasher() (hash.Hash, error) {
+	switch h {
+	case HashAlgorithmSHA256, "":
+		return sha256.New(), nil
+	case HashAlgorithmSHA512:
+		return sha512.New(), nil
+	default:
+		return nil, fmt.Errorf("unsupported hash algorithm %q", h)
+	}
 }

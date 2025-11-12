@@ -38,6 +38,8 @@ type CheckRuntimeConfig struct {
 	GPGKey           string
 	TelemetryEnabled bool
 	ProgressEnabled  bool
+	HashAlgorithm    string
+	SecureResults    bool
 	DNS              DNSConfig
 }
 
@@ -53,6 +55,8 @@ type defaultOverrides struct {
 	Operator         string
 	OperatorOverride bool
 	RetentionDays    *int
+	HashAlgorithm    string
+	SecureResults    *bool
 }
 
 var cliConfig = newCLIConfig()
@@ -72,6 +76,7 @@ func newCLIConfig() *CLIConfig {
 			TimeoutSecs:      defaultHTTPTimeoutSeconds,
 			TelemetryEnabled: false,
 			RetentionDays:    0,
+			HashAlgorithm:    HashAlgorithmSHA256.String(),
 			DNS: DNSConfig{
 				Nameservers: []string{},
 				Timeout:     defaultDNSTimeoutSeconds,
@@ -113,6 +118,15 @@ func loadDefaultOverrides() defaultOverrides {
 		overrides.RetentionDays = &val
 	}
 
+	if viper.IsSet("defaults.hash_algorithm") {
+		overrides.HashAlgorithm = viper.GetString("defaults.hash_algorithm")
+	}
+
+	if viper.IsSet("defaults.secure_results") {
+		val := viper.GetBool("defaults.secure_results")
+		overrides.SecureResults = &val
+	}
+
 	return overrides
 }
 
@@ -145,6 +159,16 @@ func applyConfigDefaults(cmd *cobra.Command) {
 			cliConfig.Defaults.RetentionDays = v
 			cliConfig.Check.RetentionDays = v
 		})
+	}
+
+	if overrides.HashAlgorithm != "" {
+		if algo, err := ParseHashAlgorithm(overrides.HashAlgorithm); err == nil {
+			cliConfig.Check.HashAlgorithm = algo.String()
+		}
+	}
+
+	if overrides.SecureResults != nil {
+		cliConfig.Check.SecureResults = *overrides.SecureResults
 	}
 }
 

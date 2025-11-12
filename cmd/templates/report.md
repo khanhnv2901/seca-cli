@@ -12,8 +12,8 @@
 - **Completed At:** {{.CompletedAt}}
 - **Duration:** {{.Duration}}
 - **Total Targets:** {{.Metadata.TotalTargets}}
-{{if .Metadata.AuditHash}}- **Audit Hash (SHA256):** `{{.Metadata.AuditHash}}`
-{{end}}
+{{if .Metadata.AuditHash}}- **Audit Hash ({{.HashAlgorithmLabel}}):** `{{.Metadata.AuditHash}}`{{end}}
+{{if .Metadata.SignatureFingerprint}}- **Signature Fingerprint:** `{{.Metadata.SignatureFingerprint}}`{{end}}
 
 ## Summary
 

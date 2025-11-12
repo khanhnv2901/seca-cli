@@ -270,6 +270,24 @@ func TestHashFileSHA256(t *testing.T) {
 	}
 }
 
+func TestHashFileSHA512(t *testing.T) {
+	env := testutil.NewTestEnv(t)
+	defer env.Cleanup()
+
+	testFile := env.CreateFile("sha512.txt", []byte("hash me with sha512"))
+
+	hash, err := HashFile(testFile, HashAlgorithmSHA512)
+	if err != nil {
+		t.Fatalf("HashFile sha512 failed: %v", err)
+	}
+
+	if len(hash) != 128 {
+		t.Errorf("Expected hash length 128 for sha512, got %d", len(hash))
+	}
+
+	env.MustExist("sha512.txt.sha512")
+}
+
 func TestHashFileSHA256_NonExistentFile(t *testing.T) {
 	_, err := HashFileSHA256("/non/existent/file.txt")
 	if err == nil {
@@ -295,5 +313,34 @@ func TestHashFileSHA256_Consistency(t *testing.T) {
 	// Hashes should be identical
 	if hash1 != hash2 {
 		t.Errorf("Hashes are not consistent: '%s' != '%s'", hash1, hash2)
+	}
+}
+
+func TestParseHashAlgorithm(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected HashAlgorithm
+		hasError bool
+	}{
+		{"sha256", HashAlgorithmSHA256, false},
+		{"SHA512", HashAlgorithmSHA512, false},
+		{"", HashAlgorithmSHA256, false},
+		{"md5", "", true},
+	}
+
+	for _, tt := range tests {
+		algo, err := ParseHashAlgorithm(tt.input)
+		if tt.hasError {
+			if err == nil {
+				t.Fatalf("expected error for %s", tt.input)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatalf("unexpected error for %s: %v", tt.input, err)
+		}
+		if algo != tt.expected {
+			t.Fatalf("expected %s, got %s", tt.expected, algo)
+		}
 	}
 }

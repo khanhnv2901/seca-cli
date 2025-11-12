@@ -107,6 +107,7 @@ var reportGenerateCmd = &cobra.Command{
 		if err := json.Unmarshal(data, &output); err != nil {
 			return fmt.Errorf("failed to parse results: %w", err)
 		}
+		normalizeRunMetadata(&output.Metadata)
 
 		// Generate report based on format
 		var reportContent string
@@ -172,24 +173,37 @@ func generateJSONReport(output *RunOutput) (string, error) {
 	return string(data), nil
 }
 
+func normalizeRunMetadata(meta *RunMetadata) {
+	if meta == nil {
+		return
+	}
+	if meta.AuditHash == "" && meta.LegacyAuditHash != "" {
+		meta.AuditHash = meta.LegacyAuditHash
+	}
+	if meta.HashAlgorithm == "" {
+		meta.HashAlgorithm = HashAlgorithmSHA256.String()
+	}
+}
+
 func generateMarkdownReport(data TemplateData) (string, error) {
 	return executeTemplate(markdownReportTemplate, data)
 }
 
 // TemplateData holds the data for HTML/PDF/Markdown template rendering
 type TemplateData struct {
-	Metadata     RunMetadata
-	Results      []checker.CheckResult
-	GeneratedAt  string
-	StartedAt    string
-	CompletedAt  string
-	Duration     string
-	SuccessCount int
-	ErrorCount   int
-	SuccessRate  string
-	FooterDate   string
-	TrendHistory []TelemetryRecord
-	TrendSummary TrendSummary
+	Metadata           RunMetadata
+	Results            []checker.CheckResult
+	GeneratedAt        string
+	StartedAt          string
+	CompletedAt        string
+	Duration           string
+	SuccessCount       int
+	ErrorCount         int
+	SuccessRate        string
+	FooterDate         string
+	TrendHistory       []TelemetryRecord
+	TrendSummary       TrendSummary
+	HashAlgorithmLabel string
 }
 
 type TrendSummary struct {
@@ -374,6 +388,7 @@ func pdfEscape(line string) string {
 }
 
 func buildTemplateData(output *RunOutput, successRateFmt string, trends []TelemetryRecord) TemplateData {
+	normalizeRunMetadata(&output.Metadata)
 	okCount, errorCount := summarizeResults(output.Results)
 	total := len(output.Results)
 	successRate := 0.0
@@ -388,18 +403,19 @@ func buildTemplateData(output *RunOutput, successRateFmt string, trends []Teleme
 	}
 
 	return TemplateData{
-		Metadata:     output.Metadata,
-		Results:      output.Results,
-		GeneratedAt:  now.Format(time.RFC3339),
-		StartedAt:    output.Metadata.StartAt.Format(time.RFC3339),
-		CompletedAt:  output.Metadata.CompleteAt.Format(time.RFC3339),
-		Duration:     duration.Round(time.Second).String(),
-		SuccessCount: okCount,
-		ErrorCount:   errorCount,
-		SuccessRate:  fmt.Sprintf(successRateFmt, successRate),
-		FooterDate:   now.Format("2006-01-02 15:04:05"),
-		TrendHistory: trends,
-		TrendSummary: summarizeTrendHistory(trends),
+		Metadata:           output.Metadata,
+		Results:            output.Results,
+		GeneratedAt:        now.Format(time.RFC3339),
+		StartedAt:          output.Metadata.StartAt.Format(time.RFC3339),
+		CompletedAt:        output.Metadata.CompleteAt.Format(time.RFC3339),
+		Duration:           duration.Round(time.Second).String(),
+		SuccessCount:       okCount,
+		ErrorCount:         errorCount,
+		SuccessRate:        fmt.Sprintf(successRateFmt, successRate),
+		FooterDate:         now.Format("2006-01-02 15:04:05"),
+		TrendHistory:       trends,
+		TrendSummary:       summarizeTrendHistory(trends),
+		HashAlgorithmLabel: strings.ToUpper(output.Metadata.HashAlgorithm),
 	}
 }
 
@@ -482,6 +498,7 @@ var reportStatsCmd = &cobra.Command{
 		if err := json.Unmarshal(data, &output); err != nil {
 			return err
 		}
+		normalizeRunMetadata(&output.Metadata)
 
 		total := len(output.Results)
 		ok, fail, soon := 0, 0, 0

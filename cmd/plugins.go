@@ -132,14 +132,14 @@ func addPluginCommand(def checkerPluginDefinition) error {
 						)
 					}
 				},
-				ResultsFilename:    def.ResultsFilename,
-				TimeoutSecs:        def.TimeoutSeconds,
-				VerificationCmd:    fmt.Sprintf("sha256sum -c audit.csv.sha256 && sha256sum -c %s.sha256", def.ResultsFilename),
-				SupportsRawCapture: false,
-				PrintSummary: func(results []checker.CheckResult, resultsPath, auditPath, auditHash, resultsHash string) {
+				ResultsFilename:        def.ResultsFilename,
+				TimeoutSecs:            def.TimeoutSeconds,
+				VerificationCmdBuilder: makeVerificationCommand(def.ResultsFilename),
+				SupportsRawCapture:     false,
+				PrintSummary: func(results []checker.CheckResult, resultsPath, auditPath, auditHash, resultsHash string, hashAlgo HashAlgorithm) {
 					fmt.Printf("%s plugin run complete.\n", def.Name)
 					fmt.Printf("Results: %s\nAudit: %s\n", resultsPath, auditPath)
-					fmt.Printf("SHA256 audit: %s\nSHA256 results: %s\n", auditHash, resultsHash)
+					fmt.Printf("%s audit: %s\n%s results: %s\n", hashAlgo.DisplayName(), auditHash, hashAlgo.DisplayName(), resultsHash)
 				},
 			})
 		},

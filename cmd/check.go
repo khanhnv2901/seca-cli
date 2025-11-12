@@ -1,13 +1,16 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/khanhnv2901/seca-cli/internal/checker"
@@ -16,15 +19,18 @@ import (
 )
 
 type RunMetadata struct {
-	Operator       string    `json:"operator"`
-	EngagementID   string    `json:"engagement_id"`
-	EngagementName string    `json:"engagement_name"`
-	Owner          string    `json:"owner"`
-	StartAt        time.Time `json:"started_at"`
-	CompleteAt     time.Time `json:"completed_at"`
-	AuditHash      string    `json:"audit_sha256"`
-	TotalTargets   int       `json:"total_targets"`
-	// Note: results.json hash is stored in results.json.sha256 file, not here
+	Operator             string    `json:"operator"`
+	EngagementID         string    `json:"engagement_id"`
+	EngagementName       string    `json:"engagement_name"`
+	Owner                string    `json:"owner"`
+	StartAt              time.Time `json:"started_at"`
+	CompleteAt           time.Time `json:"completed_at"`
+	AuditHash            string    `json:"audit_hash,omitempty"`
+	LegacyAuditHash      string    `json:"audit_sha256,omitempty"`
+	HashAlgorithm        string    `json:"hash_algorithm,omitempty"`
+	SignatureFingerprint string    `json:"signature_fingerprint,omitempty"`
+	TotalTargets         int       `json:"total_targets"`
+	// Note: results.json hash is stored in results.json.<hash> file, not here
 }
 
 type RunOutput struct {
@@ -69,14 +75,14 @@ var checkHTTPCmd = &cobra.Command{
 					)
 				}
 			},
-			ResultsFilename:    "results.json",
-			TimeoutSecs:        cliConfig.Check.TimeoutSecs,
-			VerificationCmd:    "sha256sum -c audit.csv.sha256 && sha256sum -c results_*.sha256",
-			SupportsRawCapture: true,
-			PrintSummary: func(results []checker.CheckResult, resultsPath, auditPath, auditHash, resultsHash string) {
+			ResultsFilename:        "results.json",
+			TimeoutSecs:            cliConfig.Check.TimeoutSecs,
+			VerificationCmdBuilder: makeVerificationCommand("results.json"),
+			SupportsRawCapture:     true,
+			PrintSummary: func(results []checker.CheckResult, resultsPath, auditPath, auditHash, resultsHash string, hashAlgo HashAlgorithm) {
 				fmt.Printf("Run complete.\n")
 				fmt.Printf("Results: %s\nAudit: %s\n", resultsPath, auditPath)
-				fmt.Printf("SHA256 audit: %s\nSHA256 results: %s\n", auditHash, resultsHash)
+				fmt.Printf("%s audit: %s\n%s results: %s\n", hashAlgo.DisplayName(), auditHash, hashAlgo.DisplayName(), resultsHash)
 			},
 		})
 	},
@@ -122,11 +128,11 @@ All checks are safe, non-intrusive DNS queries only.`,
 					)
 				}
 			},
-			ResultsFilename:    "dns_results.json",
-			TimeoutSecs:        cliConfig.Check.DNS.Timeout,
-			VerificationCmd:    "sha256sum -c audit.csv.sha256 && sha256sum -c dns_results.json.sha256",
-			SupportsRawCapture: false,
-			PrintSummary: func(results []checker.CheckResult, resultsPath, auditPath, auditHash, resultsHash string) {
+			ResultsFilename:        "dns_results.json",
+			TimeoutSecs:            cliConfig.Check.DNS.Timeout,
+			VerificationCmdBuilder: makeVerificationCommand("dns_results.json"),
+			SupportsRawCapture:     false,
+			PrintSummary: func(results []checker.CheckResult, resultsPath, auditPath, auditHash, resultsHash string, hashAlgo HashAlgorithm) {
 				// Count successes and errors
 				okCount := 0
 				errorCount := 0
@@ -140,7 +146,7 @@ All checks are safe, non-intrusive DNS queries only.`,
 
 				fmt.Printf("DNS Check complete.\n")
 				fmt.Printf("Results: %s\nAudit: %s\n", resultsPath, auditPath)
-				fmt.Printf("SHA256 audit: %s\nSHA256 results: %s\n", auditHash, resultsHash)
+				fmt.Printf("%s audit: %s\n%s results: %s\n", hashAlgo.DisplayName(), auditHash, hashAlgo.DisplayName(), resultsHash)
 				fmt.Printf("Summary: %d OK, %d Errors (out of %d targets)\n", okCount, errorCount, len(results))
 			},
 		})
@@ -171,13 +177,21 @@ type checkConfig struct {
 	TimeoutSecs int
 
 	// Verification command for compliance summary
-	VerificationCmd string
+	VerificationCmdBuilder func(HashAlgorithm) string
 
 	// Whether this check supports raw capture
 	SupportsRawCapture bool
 
 	// Custom result summary printer (optional)
-	PrintSummary func(results []checker.CheckResult, resultsPath, auditPath, auditHash, resultsHash string)
+	PrintSummary func(results []checker.CheckResult, resultsPath, auditPath, auditHash, resultsHash string, algo HashAlgorithm)
+}
+
+func makeVerificationCommand(resultsFilename string) func(HashAlgorithm) string {
+	return func(algo HashAlgorithm) string {
+		sumCmd := algo.SumCommand()
+		ext := algo.FileExtension()
+		return fmt.Sprintf("%s -c audit.csv%s && %s -c %s%s", sumCmd, ext, sumCmd, resultsFilename, ext)
+	}
 }
 
 // runCheckCommand executes a check command with the given configuration.
@@ -186,6 +200,11 @@ func runCheckCommand(cmd *cobra.Command, config checkConfig) error {
 	// Get application context
 	appCtx := getAppContext(cmd)
 	runtimeCfg := appCtx.Config.Check
+
+	hashAlgo, err := ParseHashAlgorithm(runtimeCfg.HashAlgorithm)
+	if err != nil {
+		return err
+	}
 
 	// Parse flags
 	params := checkParams{
@@ -203,6 +222,10 @@ func runCheckCommand(cmd *cobra.Command, config checkConfig) error {
 	}
 	if err := validateCheckParams(params, appCtx, config.SupportsRawCapture && runtimeCfg.AuditAppendRaw, retentionForValidation); err != nil {
 		return err
+	}
+
+	if runtimeCfg.SecureResults && runtimeCfg.GPGKey == "" {
+		return fmt.Errorf("--secure-results requires --gpg-key")
 	}
 
 	// Load engagement
@@ -260,15 +283,25 @@ func runCheckCommand(cmd *cobra.Command, config checkConfig) error {
 
 	// Write results and compute hashes
 	metadata := RunMetadata{
-		Operator:       appCtx.Operator,
-		EngagementID:   params.ID,
-		EngagementName: eng.Name,
-		Owner:          eng.Owner,
-		StartAt:        startAll,
+		Operator:             appCtx.Operator,
+		EngagementID:         params.ID,
+		EngagementName:       eng.Name,
+		Owner:                eng.Owner,
+		StartAt:              startAll,
+		HashAlgorithm:        hashAlgo.String(),
+		SignatureFingerprint: "",
+	}
+
+	if params.AutoSign {
+		fingerprint, err := getGPGFingerprint(params.GPGKey)
+		if err != nil {
+			return fmt.Errorf("resolve GPG fingerprint: %w", err)
+		}
+		metadata.SignatureFingerprint = fingerprint
 	}
 
 	resultsPath, auditPath, auditHash, resultsHash, err := writeResultsAndHash(
-		appCtx, params.ID, config.ResultsFilename, metadata, results, startAll,
+		appCtx, params.ID, config.ResultsFilename, metadata, results, startAll, hashAlgo,
 	)
 	if err != nil {
 		return err
@@ -276,19 +309,31 @@ func runCheckCommand(cmd *cobra.Command, config checkConfig) error {
 
 	// GPG signing if requested
 	if params.AutoSign {
-		if err := signHashFiles(auditPath, resultsPath, params.GPGKey); err != nil {
+		if err := signHashFiles(auditPath, resultsPath, hashAlgo, params.GPGKey); err != nil {
+			return err
+		}
+	}
+
+	// Optional audit encryption
+	if runtimeCfg.SecureResults {
+		if _, err := encryptAuditLog(auditPath, runtimeCfg.GPGKey); err != nil {
 			return err
 		}
 	}
 
 	// Print results summary
 	if config.PrintSummary != nil {
-		config.PrintSummary(results, resultsPath, auditPath, auditHash, resultsHash)
+		config.PrintSummary(results, resultsPath, auditPath, auditHash, resultsHash, hashAlgo)
 	} else {
 		// Default summary
 		fmt.Printf("Run complete.\n")
 		fmt.Printf("Results: %s\nAudit: %s\n", resultsPath, auditPath)
-		fmt.Printf("SHA256 audit: %s\nSHA256 results: %s\n", auditHash, resultsHash)
+		fmt.Printf("%s audit: %s\n%s results: %s\n", hashAlgo.DisplayName(), auditHash, hashAlgo.DisplayName(), resultsHash)
+	}
+
+	verificationCmd := ""
+	if config.VerificationCmdBuilder != nil {
+		verificationCmd = config.VerificationCmdBuilder(hashAlgo)
 	}
 
 	// Print compliance summary if in compliance mode
@@ -300,8 +345,9 @@ func runCheckCommand(cmd *cobra.Command, config checkConfig) error {
 		}
 		printComplianceSummary(
 			appCtx, eng, auditHash, resultsHash,
-			config.VerificationCmd,
+			verificationCmd,
 			rawCaptureEnabled, retentionDaysForSummary,
+			hashAlgo,
 		)
 	}
 
@@ -362,7 +408,7 @@ func loadEngagementByID(id string) (*Engagement, error) {
 }
 
 // writeResultsAndHash writes results to JSON file, computes hashes, and returns paths and hashes
-func writeResultsAndHash(appCtx *AppContext, id string, resultsFilename string, metadata RunMetadata, results []checker.CheckResult, startTime time.Time) (resultsPath, auditPath, auditHash, resultsHash string, err error) {
+func writeResultsAndHash(appCtx *AppContext, id string, resultsFilename string, metadata RunMetadata, results []checker.CheckResult, startTime time.Time, hashAlgo HashAlgorithm) (resultsPath, auditPath, auditHash, resultsHash string, err error) {
 	dir := filepath.Join(appCtx.ResultsDir, id)
 	if err := os.MkdirAll(dir, consts.DefaultDirPerm); err != nil {
 		return "", "", "", "", fmt.Errorf("failed to create results directory: %w", err)
@@ -390,13 +436,21 @@ func writeResultsAndHash(appCtx *AppContext, id string, resultsFilename string, 
 
 	// Compute hash for audit.csv
 	auditPath = filepath.Join(dir, "audit.csv")
-	auditHash, err = HashFileSHA256(auditPath)
+	auditHash, err = HashFile(auditPath, hashAlgo)
 	if err != nil {
 		return "", "", "", "", fmt.Errorf("failed to hash audit file: %w", err)
 	}
 
 	// Update metadata with audit hash and write final results JSON
 	out.Metadata.AuditHash = auditHash
+	if hashAlgo == HashAlgorithmSHA256 {
+		out.Metadata.LegacyAuditHash = auditHash
+	} else {
+		out.Metadata.LegacyAuditHash = ""
+	}
+	if out.Metadata.HashAlgorithm == "" {
+		out.Metadata.HashAlgorithm = hashAlgo.String()
+	}
 	b, err = json.MarshalIndent(out, jsonPrefix, jsonIndent)
 	if err != nil {
 		return "", "", "", "", fmt.Errorf("failed to marshal final results: %w", err)
@@ -407,7 +461,7 @@ func writeResultsAndHash(appCtx *AppContext, id string, resultsFilename string, 
 	}
 
 	// Hash results.json AFTER final write
-	resultsHash, err = HashFileSHA256(resultsPath)
+	resultsHash, err = HashFile(resultsPath, hashAlgo)
 	if err != nil {
 		return "", "", "", "", fmt.Errorf("failed to hash results file: %w", err)
 	}
@@ -415,12 +469,13 @@ func writeResultsAndHash(appCtx *AppContext, id string, resultsFilename string, 
 	return resultsPath, auditPath, auditHash, resultsHash, nil
 }
 
-// signHashFiles signs the .sha256 files using GPG
-func signHashFiles(auditPath, resultsPath, gpgKey string) error {
+// signHashFiles signs the hash files using GPG
+func signHashFiles(auditPath, resultsPath string, hashAlgo HashAlgorithm, gpgKey string) error {
 	if gpgKey == "" {
 		return fmt.Errorf("--gpg-key required with --auto-sign")
 	}
 
+	extension := hashAlgo.FileExtension()
 	signFile := func(path string) error {
 		cmd := exec.Command("gpg", "--armor", "--local-user", gpgKey, "--sign", path)
 		cmd.Dir = filepath.Dir(path)
@@ -428,24 +483,63 @@ func signHashFiles(auditPath, resultsPath, gpgKey string) error {
 		return cmd.Run()
 	}
 
-	if err := signFile(auditPath + ".sha256"); err != nil {
+	if err := signFile(auditPath + extension); err != nil {
 		return fmt.Errorf("failed to sign audit hash file: %w", err)
 	}
 
-	if err := signFile(resultsPath + ".sha256"); err != nil {
+	if err := signFile(resultsPath + extension); err != nil {
 		return fmt.Errorf("failed to sign results hash file: %w", err)
 	}
 
-	fmt.Println("GPG signatures created for both .sha256 files.")
+	fmt.Printf("GPG signatures created for %s hash files.\n", hashAlgo.DisplayName())
 	return nil
 }
 
+func getGPGFingerprint(gpgKey string) (string, error) {
+	if gpgKey == "" {
+		return "", errors.New("--gpg-key required to determine fingerprint")
+	}
+	cmd := exec.Command("gpg", "--with-colons", "--list-keys", gpgKey)
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("failed to inspect GPG key %s: %w", gpgKey, err)
+	}
+
+	for _, line := range strings.Split(buf.String(), "\n") {
+		if strings.HasPrefix(line, "fpr:") {
+			parts := strings.Split(line, ":")
+			if len(parts) > 9 {
+				return parts[9], nil
+			}
+		}
+	}
+	return "", fmt.Errorf("could not find fingerprint for %s", gpgKey)
+}
+
+func encryptAuditLog(auditPath, gpgKey string) (string, error) {
+	if gpgKey == "" {
+		return "", errors.New("--gpg-key required for secure results")
+	}
+	encryptedPath := auditPath + ".gpg"
+	cmd := exec.Command("gpg", "--yes", "--recipient", gpgKey, "--output", encryptedPath, "--encrypt", auditPath)
+	cmd.Dir = filepath.Dir(auditPath)
+	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("failed to encrypt audit log: %w", err)
+	}
+	fmt.Printf("Encrypted audit log created at %s\n", encryptedPath)
+	return encryptedPath, nil
+}
+
 // printComplianceSummary prints the compliance mode summary
-func printComplianceSummary(appCtx *AppContext, eng *Engagement, auditHash, resultsHash string, verificationCmd string, auditAppendRaw bool, retentionDays int) {
+func printComplianceSummary(appCtx *AppContext, eng *Engagement, auditHash, resultsHash string, verificationCmd string, auditAppendRaw bool, retentionDays int, hashAlgo HashAlgorithm) {
 	fmt.Println("------------------------------------------------------")
 	fmt.Println("🔒 Compliance Summary")
 	fmt.Printf("Operator: %s\nEngagement: %s (%s)\n", appCtx.Operator, eng.Name, eng.ID)
-	fmt.Printf("Audit hash : %s\nResults hash: %s\n", auditHash, resultsHash)
+	fmt.Printf("%s audit hash : %s\n", hashAlgo.DisplayName(), auditHash)
+	fmt.Printf("%s results hash: %s\n", hashAlgo.DisplayName(), resultsHash)
 	fmt.Printf("Verification: %s\n", verificationCmd)
 	if auditAppendRaw {
 		fmt.Printf("Retention: raw captures must be deleted or anonymized after %d day(s).\n", retentionDays)
@@ -471,6 +565,8 @@ func init() {
 	checkCmd.PersistentFlags().IntVarP(&cliConfig.Check.TimeoutSecs, "timeout", "t", cliConfig.Check.TimeoutSecs, "request timeout in seconds")
 	checkCmd.PersistentFlags().BoolVar(&cliConfig.Check.TelemetryEnabled, "telemetry", cliConfig.Check.TelemetryEnabled, "Record telemetry metrics (durations, success rates)")
 	checkCmd.PersistentFlags().BoolVar(&cliConfig.Check.ProgressEnabled, "progress", cliConfig.Check.ProgressEnabled, "Display live progress for checks")
+	checkCmd.PersistentFlags().StringVar(&cliConfig.Check.HashAlgorithm, "hash", cliConfig.Check.HashAlgorithm, "Hash algorithm for integrity verification (sha256|sha512)")
+	checkCmd.PersistentFlags().BoolVar(&cliConfig.Check.SecureResults, "secure-results", cliConfig.Check.SecureResults, "Encrypt audit logs with operator GPG key after run")
 
 	// HTTP-specific flags
 	addCommonCheckFlags(checkHTTPCmd)

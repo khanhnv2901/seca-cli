@@ -262,7 +262,10 @@ li {
         <div class="metadata-item"><span class="metadata-label">Duration:</span> {{.Duration}}</div>
         <div class="metadata-item"><span class="metadata-label">Total Targets:</span> {{.Metadata.TotalTargets}}</div>
         {{if .Metadata.AuditHash}}
-        <div class="metadata-item"><span class="metadata-label">Audit Hash (SHA256):</span> <span class="code">{{.Metadata.AuditHash}}</span></div>
+        <div class="metadata-item"><span class="metadata-label">Audit Hash ({{.HashAlgorithmLabel}}):</span> <span class="code">{{.Metadata.AuditHash}}</span></div>
+        {{end}}
+        {{if .Metadata.SignatureFingerprint}}
+        <div class="metadata-item"><span class="metadata-label">Signature Fingerprint:</span> <span class="code">{{.Metadata.SignatureFingerprint}}</span></div>
         {{end}}
     </div>
 
