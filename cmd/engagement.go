@@ -84,7 +84,7 @@ var engagementAddScopeCmd = &cobra.Command{
 			return errors.New("--scope must contain one or more hosts/urls")
 		}
 
-		normalizedScope, err := normalizeScopeEntries(add)
+		normalizedScope, err := normalizeScopeEntries(id, add)
 		if err != nil {
 			return err
 		}
@@ -168,15 +168,23 @@ var allowedScopeSchemes = map[string]struct{}{
 	"https": {},
 }
 
-func normalizeScopeEntries(entries []string) ([]string, error) {
+func normalizeScopeEntries(scopeID string, entries []string) ([]string, error) {
 	out := make([]string, len(entries))
 	for i, entry := range entries {
 		trimmed := strings.TrimSpace(entry)
 		if trimmed == "" {
-			return nil, fmt.Errorf("scope entry %q is empty", entry)
+			baseErr := &ScopeViolationError{
+				Target: entry,
+				Scope:  scopeID,
+			}
+			return nil, fmt.Errorf("%w: entry is empty or whitespace", baseErr)
 		}
 		if err := validateScopeEntry(trimmed); err != nil {
-			return nil, fmt.Errorf("invalid scope entry %q: %w", entry, err)
+			baseErr := &ScopeViolationError{
+				Target: trimmed,
+				Scope:  scopeID,
+			}
+			return nil, fmt.Errorf("%w: %v", baseErr, err)
 		}
 		out[i] = trimmed
 	}

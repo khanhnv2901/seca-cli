@@ -299,7 +299,7 @@ func TestNormalizeScopeEntries(t *testing.T) {
 			"example.com:8443/report",
 			"192.168.1.10",
 		}
-		normalized, err := normalizeScopeEntries(input)
+		normalized, err := normalizeScopeEntries("eng-123", input)
 		if err != nil {
 			t.Fatalf("Expected entries to be valid, got error: %v", err)
 		}
@@ -319,7 +319,7 @@ func TestNormalizeScopeEntries(t *testing.T) {
 		}
 
 		for _, tc := range testCases {
-			if _, err := normalizeScopeEntries(tc); err == nil {
+			if _, err := normalizeScopeEntries("eng-123", tc); err == nil {
 				t.Errorf("Expected error for scope entries %v, but got none", tc)
 			}
 		}

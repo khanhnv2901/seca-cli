@@ -6,13 +6,13 @@ import (
 
 func TestParseTarget(t *testing.T) {
 	testCases := []struct {
-		name         string
-		target       string
-		wantScheme   string
-		wantHost     string
-		wantPort     string
-		wantPath     string
-		wantFullURL  string
+		name        string
+		target      string
+		wantScheme  string
+		wantHost    string
+		wantPort    string
+		wantPath    string
+		wantFullURL string
 	}{
 		{
 			name:        "Simple domain",
@@ -319,7 +319,7 @@ func TestParseTarget_EdgeCases(t *testing.T) {
 			// Should not panic
 			info := ParseTarget(tc.target)
 			if info == nil {
-				t.Error("Expected non-nil result")
+				t.Fatalf("Expected non-nil result for target %q", tc.target)
 			}
 			if info.Original != tc.target {
 				t.Errorf("Expected original '%s', got '%s'", tc.target, info.Original)

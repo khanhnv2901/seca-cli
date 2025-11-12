@@ -37,7 +37,6 @@ var (
 	rateLimit      int // requests per second
 	timeoutSecs    int
 	auditAppendRaw bool
-	complianceMode bool
 	retentionDays  int
 	autoSign       bool
 	gpgKey         string
@@ -334,12 +333,12 @@ func loadEngagementByID(id string) (*Engagement, error) {
 	for i := range engs {
 		if engs[i].ID == id {
 			if len(engs[i].Scope) == 0 {
-				return nil, fmt.Errorf("no scope found for engagement %s", id)
+				return nil, &ScopeViolationError{Scope: id}
 			}
 			return &engs[i], nil
 		}
 	}
-	return nil, fmt.Errorf("no engagement found with id %s", id)
+	return nil, &EngagementNotFoundError{ID: id}
 }
 
 // writeResultsAndHash writes results to JSON file, computes hashes, and returns paths and hashes
