@@ -168,6 +168,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.1] - 2025-11-12
+
+### Changed
+
+#### Code Quality Improvements
+- **Eliminated Global Variables**: Refactored command-line interface to use dependency injection pattern
+  - Introduced `AppContext` struct to manage application-wide dependencies (logger, operator, results directory)
+  - Removed global variables from [cmd/root.go](cmd/root.go) improving testability and maintainability
+  - Updated all command files ([cmd/check.go](cmd/check.go), [cmd/report.go](cmd/report.go), [cmd/info.go](cmd/info.go)) to use context-based approach
+
+- **Reduced Code Duplication**: Significant refactoring of check command handlers
+  - Created `runCheckCommand()` helper function implementing Template Method pattern
+  - Introduced `checkConfig` struct using Strategy Pattern for command configuration
+  - HTTP command handler reduced from 105 to 43 lines (59% reduction)
+  - DNS command handler reduced from 125 to 63 lines (50% reduction)
+  - Overall [cmd/check.go](cmd/check.go) reduced from 577 to 459 lines (20.4% reduction)
+  - Extracted common helper functions: `validateCheckParams`, `loadEngagementByID`, `writeResultsAndHash`, `signHashFiles`, `printComplianceSummary`
+
+- **Enhanced Command Consistency**: Added missing flags to DNS command for feature parity with HTTP command
+  - Added `--id`, `--roe-confirm`, `--compliance-mode`, `--auto-sign`, `--gpg-key` flags
+  - Standardized flag handling across all check commands
+
+#### Test Infrastructure
+- Updated test files to work with new `AppContext` architecture
+  - Created `setupTestAppContext()` helper in [cmd/info_test.go](cmd/info_test.go)
+  - Updated 11 test functions in info_test.go
+  - Updated all audit trail tests in [cmd/audit_test.go](cmd/audit_test.go)
+  - Maintained 100% test pass rate throughout refactoring
+
+### Technical Details
+
+#### Architecture Improvements
+- **Pattern Implementation**:
+  - Dependency Injection: `AppContext` replaces global state
+  - Strategy Pattern: `CreateChecker` and `CreateAuditFn` function pointers
+  - Factory Pattern: Dynamic checker and audit function creation
+  - Template Method: `runCheckCommand()` defines common execution flow
+
+#### Files Modified
+- [cmd/root.go](cmd/root.go): Added `AppContext` struct and helper functions
+- [cmd/check.go](cmd/check.go): Major refactoring with `runCheckCommand()` helper
+- [cmd/report.go](cmd/report.go): Updated to use `appCtx.ResultsDir`
+- [cmd/info.go](cmd/info.go): Updated to use `appCtx.Operator` and `appCtx.ResultsDir`
+- [cmd/audit.go](cmd/audit.go): Updated function signatures to accept `resultsDir` parameter
+- [cmd/audit_test.go](cmd/audit_test.go): Updated all tests for new signatures
+- [cmd/info_test.go](cmd/info_test.go): Added test context setup helper
+
+#### Benefits
+- **Improved Testability**: Explicit dependency injection makes unit testing easier
+- **Better Maintainability**: Reduced duplication means fewer places to update
+- **Enhanced Readability**: Command handlers now focus on configuration, not implementation
+- **Consistent Behavior**: Shared helper functions ensure uniform error handling and output
+
+---
+
 ## [Unreleased]
 
 ### Planned for v1.3.0

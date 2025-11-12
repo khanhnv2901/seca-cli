@@ -56,174 +56,43 @@ var checkHTTPCmd = &cobra.Command{
 	Use:   "http",
 	Short: "Run safe HTTP/TLS checks for an engagement's scope",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Get application context
-		appCtx := getAppContext(cmd)
-
-		id, _ := cmd.Flags().GetString("id")
-
-		// Safety: require explicit ROE flag for any run
-		roeConfirm, _ := cmd.Flags().GetBool("roe-confirm")
-
-		// check compliance mode
-		complianceMode, _ := cmd.Flags().GetBool("compliance-mode")
-
-		// auto sign GPG Key
-		autoSign, _ = cmd.Flags().GetBool("auto-sign")
-		gpgKey, _ = cmd.Flags().GetString("gpg-key")
-
-		if id == "" {
-			return fmt.Errorf("--id is required")
-		}
-
-		if !roeConfirm {
-			return fmt.Errorf("this action requires --roe-confirm to proceed (ensures explicit written authorization)")
-		}
-
-		if appCtx.Operator == "" {
-			return fmt.Errorf("--operator is required")
-		}
-
-		if complianceMode {
-			fmt.Println("[Compliance Mode] Enabled")
-
-			// Require operator
-			if appCtx.Operator == "" {
-				return fmt.Errorf("--operator required in compliance mode")
-			}
-
-			// Auto-force hash-signing (already done later)
-			// Nothing to change here, but we'll print a notice
-			fmt.Println("-> Hash-signing of audit and result files enforced")
-
-			// If raw audit capture used, require retentionDays > 0
-			if auditAppendRaw && retentionDays <= 0 {
-				return fmt.Errorf("in compliance mode, --audit-append-raw requires --retention-days=<N>")
-			}
-		}
-
-		// load engagement
-		engs := loadEngagements()
-		var eng *Engagement
-		for i := range engs {
-			if engs[i].ID == id {
-				eng = &engs[i]
-				break
-			}
-		}
-		if eng == nil {
-			return fmt.Errorf("no engagement found with id %s", id)
-		}
-
-		if len(eng.Scope) == 0 {
-			return fmt.Errorf("no scope found for engagement %s", id)
-		}
-
-		startAll := time.Now()
-		dir := filepath.Join(appCtx.ResultsDir, id)
-		_ = os.MkdirAll(dir, 0o755)
-
-		// Create HTTP checker
-		httpChecker := &checker.HTTPChecker{
-			Timeout:    time.Duration(timeoutSecs) * time.Second,
-			CaptureRaw: auditAppendRaw,
-			RawHandler: func(target string, headers http.Header, bodySnippet string) error {
-				return SaveRawCapture(appCtx.ResultsDir, id, target, headers, bodySnippet)
+		return runCheckCommand(cmd, checkConfig{
+			CreateChecker: func(appCtx *AppContext, params checkParams) checker.Checker {
+				return &checker.HTTPChecker{
+					Timeout:    time.Duration(timeoutSecs) * time.Second,
+					CaptureRaw: auditAppendRaw,
+					RawHandler: func(target string, headers http.Header, bodySnippet string) error {
+						return SaveRawCapture(appCtx.ResultsDir, params.ID, target, headers, bodySnippet)
+					},
+				}
 			},
-		}
-
-		// Create audit function
-		auditFn := func(target string, result checker.CheckResult, duration float64) error {
-			return AppendAuditRow(
-				appCtx.ResultsDir,
-				id,
-				appCtx.Operator,
-				httpChecker.Name(),
-				target,
-				result.Status,
-				result.HTTPStatus,
-				result.TLSExpiry,
-				result.Notes,
-				result.Error,
-				duration,
-			)
-		}
-
-		// Create runner and execute checks
-		runner := &checker.Runner{
-			Concurrency: concurrency,
-			RateLimit:   rateLimit,
-			Timeout:     time.Duration(timeoutSecs) * time.Second,
-		}
-
-		ctx := context.Background()
-		results := runner.RunChecks(ctx, eng.Scope, httpChecker, auditFn)
-
-		// Write results JSON
-		resultsPath := filepath.Join(dir, "results.json")
-		out := RunOutput{
-			Metadata: RunMetadata{
-				Operator:       appCtx.Operator,
-				EngagementID:   id,
-				EngagementName: eng.Name,
-				Owner:          eng.Owner,
-				StartAt:        startAll,
-				CompleteAt:     time.Now().UTC(),
-				TotalTargets:   len(eng.Scope),
+			CreateAuditFn: func(appCtx *AppContext, params checkParams, chk checker.Checker) func(string, checker.CheckResult, float64) error {
+				return func(target string, result checker.CheckResult, duration float64) error {
+					return AppendAuditRow(
+						appCtx.ResultsDir,
+						params.ID,
+						appCtx.Operator,
+						chk.Name(),
+						target,
+						result.Status,
+						result.HTTPStatus,
+						result.TLSExpiry,
+						result.Notes,
+						result.Error,
+						duration,
+					)
+				}
 			},
-			Results: results,
-		}
-		b, _ := json.MarshalIndent(out, "", "  ")
-		_ = os.WriteFile(resultsPath, b, 0o644)
-
-		// Compute hash for audit.csv
-		auditPath := filepath.Join(dir, "audit.csv")
-		auditHash, _ := HashFileSHA256(auditPath)
-
-		// Update metadata with audit hash only
-		out.Metadata.AuditHash = auditHash
-
-		// Write final results JSON
-		b, _ = json.MarshalIndent(out, "", "  ")
-		_ = os.WriteFile(resultsPath, b, 0o644)
-
-		// Hash results.json AFTER final write
-		resultsHash, _ := HashFileSHA256(resultsPath)
-
-		// Note: ResultsHash is not stored in the file itself to avoid hash mismatch
-
-		if autoSign {
-			if gpgKey == "" {
-				return fmt.Errorf("--gpg-key required with --auto-sign")
-			}
-			signFile := func(path string) error {
-				cmd := exec.Command("gpg", "--armor", "--local-user", gpgKey, "--sign", path)
-				cmd.Dir = filepath.Dir(path)
-				cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-				return cmd.Run()
-			}
-			_ = signFile(auditPath + ".sha256")
-			_ = signFile(resultsPath + ".sha256")
-			fmt.Println("GPG signatures created for both .sha256 files.")
-		}
-
-		fmt.Printf("Run complete.\n")
-		fmt.Printf("Results: %s\nAudit: %s\n", resultsPath, auditPath)
-		fmt.Printf("SHA256 audit: %s\nSHA256 results: %s\n", auditHash, resultsHash)
-
-		if complianceMode {
-			fmt.Println("------------------------------------------------------")
-			fmt.Println("🔒 Compliance Summary")
-			fmt.Printf("Operator: %s\nEngagement: %s (%s)\n", appCtx.Operator, eng.Name, eng.ID)
-			fmt.Printf("Audit hash : %s\nResults hash: %s\n", auditHash, resultsHash)
-			fmt.Println("Verification: sha256sum -c audit.csv.sha256 && sha256sum -c results_*.sha256")
-			if auditAppendRaw {
-				fmt.Printf("Retention: raw captures must be deleted or anonymized after %d day(s).\n", retentionDays)
-			}
-			fmt.Println("Evidence integrity and retention requirements satisfied.")
-			fmt.Println("------------------------------------------------------")
-		}
-
-		return nil
+			ResultsFilename:    "results.json",
+			TimeoutSecs:        timeoutSecs,
+			VerificationCmd:    "sha256sum -c audit.csv.sha256 && sha256sum -c results_*.sha256",
+			SupportsRawCapture: true,
+			PrintSummary: func(results []checker.CheckResult, resultsPath, auditPath, auditHash, resultsHash string) {
+				fmt.Printf("Run complete.\n")
+				fmt.Printf("Results: %s\nAudit: %s\n", resultsPath, auditPath)
+				fmt.Printf("SHA256 audit: %s\nSHA256 results: %s\n", auditHash, resultsHash)
+			},
+		})
 	},
 }
 
@@ -242,178 +111,332 @@ var checkDNSCmd = &cobra.Command{
 
 All checks are safe, non-intrusive DNS queries only.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Get application context
-		appCtx := getAppContext(cmd)
-
-		id, _ := cmd.Flags().GetString("id")
-
-		// Safety: require explicit ROE flag for any run
-		roeConfirm, _ := cmd.Flags().GetBool("roe-confirm")
-
-		// check compliance mode
-		complianceMode, _ := cmd.Flags().GetBool("compliance-mode")
-
-		// auto sign GPG key
-		autoSign, _ := cmd.Flags().GetBool("auto-sign")
-		gpgKey, _ := cmd.Flags().GetString("gpg-key")
-
-		if id == "" {
-			return fmt.Errorf("--id is required")
-		}
-
-		if !roeConfirm {
-			return fmt.Errorf("this action requires --roe-confirm to proceed (ensures explicit written authorization)")
-		}
-
-		if appCtx.Operator == "" {
-			return fmt.Errorf("--operator is required")
-		}
-
-		if complianceMode {
-			fmt.Println("[Compliance Mode] Enabled")
-
-			// Require operator
-			if appCtx.Operator == "" {
-				return fmt.Errorf("--operator required in compliance mode")
-			}
-
-			// Hash-signing enforcement
-			fmt.Println("-> Hash-signing of audit and result files enforced")
-		}
-
-		engs := loadEngagements()
-		var eng *Engagement
-		for i := range engs {
-			if engs[i].ID == id {
-				eng = &engs[i]
-				break
-			}
-		}
-
-		if eng == nil {
-			return fmt.Errorf("no engagement found with id %s", id)
-		}
-
-		if len(eng.Scope) == 0 {
-			return fmt.Errorf("no scope found for engagement %s", id)
-		}
-
-		startAll := time.Now()
-		dir := filepath.Join(appCtx.ResultsDir, id)
-		_ = os.MkdirAll(dir, 0o755)
-
-		// Create DNS checker
-		dnsChecker := &checker.DNSChecker{
-			Timeout:    time.Duration(dnsTimeout) * time.Second,
-			NameServer: dnsNameservers,
-		}
-
-		// Create audit function
-		auditFn := func(target string, result checker.CheckResult, duration float64) error {
-			// For DNS checks, we don;t have HTTP status
-			return AppendAuditRow(
-				appCtx.ResultsDir,
-				id, appCtx.Operator, dnsChecker.Name(), target, result.Status,
-				0,  // No HTTP status for DNS
-				"", // No TLS expiry for DNS
-				result.Notes,
-				result.Error,
-				duration,
-			)
-		}
-
-		// Create runner and execute checks
-		runner := &checker.Runner{
-			Concurrency: concurrency,
-			RateLimit:   rateLimit,
-			Timeout:     time.Duration(dnsTimeout) * time.Second,
-		}
-
-		ctx := context.Background()
-		results := runner.RunChecks(ctx, eng.Scope, dnsChecker, auditFn)
-
-		// Write results JSON
-		resultsPath := filepath.Join(dir, "dns_results.json")
-		out := RunOutput{
-			Metadata: RunMetadata{
-				Operator:       appCtx.Operator,
-				EngagementID:   id,
-				EngagementName: eng.Name,
-				Owner:          eng.Owner,
-				StartAt:        startAll,
-				CompleteAt:     time.Now().UTC(),
-				TotalTargets:   len(eng.Scope),
+		return runCheckCommand(cmd, checkConfig{
+			CreateChecker: func(appCtx *AppContext, params checkParams) checker.Checker {
+				return &checker.DNSChecker{
+					Timeout:    time.Duration(dnsTimeout) * time.Second,
+					NameServer: dnsNameservers,
+				}
 			},
-			Results: results,
+			CreateAuditFn: func(appCtx *AppContext, params checkParams, chk checker.Checker) func(string, checker.CheckResult, float64) error {
+				return func(target string, result checker.CheckResult, duration float64) error {
+					return AppendAuditRow(
+						appCtx.ResultsDir,
+						params.ID,
+						appCtx.Operator,
+						chk.Name(),
+						target,
+						result.Status,
+						0,  // No HTTP status for DNS
+						"", // No TLS expiry for DNS
+						result.Notes,
+						result.Error,
+						duration,
+					)
+				}
+			},
+			ResultsFilename:    "dns_results.json",
+			TimeoutSecs:        dnsTimeout,
+			VerificationCmd:    "sha256sum -c audit.csv.sha256 && sha256sum -c dns_results.json.sha256",
+			SupportsRawCapture: false,
+			PrintSummary: func(results []checker.CheckResult, resultsPath, auditPath, auditHash, resultsHash string) {
+				// Count successes and errors
+				okCount := 0
+				errorCount := 0
+				for _, r := range results {
+					if r.Status == "ok" {
+						okCount++
+					} else {
+						errorCount++
+					}
+				}
+
+				fmt.Printf("DNS Check complete.\n")
+				fmt.Printf("Results: %s\nAudit: %s\n", resultsPath, auditPath)
+				fmt.Printf("SHA256 audit: %s\nSHA256 results: %s\n", auditHash, resultsHash)
+				fmt.Printf("Summary: %d OK, %d Errors (out of %d targets)\n", okCount, errorCount, len(results))
+			},
+		})
+	},
+}
+
+// checkParams holds common parameters for check commands
+type checkParams struct {
+	ID             string
+	ROEConfirm     bool
+	ComplianceMode bool
+	AutoSign       bool
+	GPGKey         string
+}
+
+// checkConfig holds configuration for running a check command
+type checkConfig struct {
+	// Checker creation function
+	CreateChecker func(appCtx *AppContext, params checkParams) checker.Checker
+
+	// Audit function creation
+	CreateAuditFn func(appCtx *AppContext, params checkParams, chk checker.Checker) func(string, checker.CheckResult, float64) error
+
+	// Results filename (e.g., "results.json" or "dns_results.json")
+	ResultsFilename string
+
+	// Timeout in seconds for the runner
+	TimeoutSecs int
+
+	// Verification command for compliance summary
+	VerificationCmd string
+
+	// Whether this check supports raw capture
+	SupportsRawCapture bool
+
+	// Custom result summary printer (optional)
+	PrintSummary func(results []checker.CheckResult, resultsPath, auditPath, auditHash, resultsHash string)
+}
+
+// runCheckCommand executes a check command with the given configuration.
+// This is the common execution pattern shared by all check commands (HTTP, DNS, etc.)
+func runCheckCommand(cmd *cobra.Command, config checkConfig) error {
+	// Get application context
+	appCtx := getAppContext(cmd)
+
+	// Parse flags
+	params := checkParams{
+		ID:             cmd.Flag("id").Value.String(),
+		ROEConfirm:     cmd.Flag("roe-confirm").Value.String() == "true",
+		ComplianceMode: cmd.Flag("compliance-mode").Value.String() == "true",
+		AutoSign:       cmd.Flag("auto-sign").Value.String() == "true",
+		GPGKey:         cmd.Flag("gpg-key").Value.String(),
+	}
+
+	// Validate parameters
+	retentionForValidation := 0
+	if config.SupportsRawCapture {
+		retentionForValidation = retentionDays
+	}
+	if err := validateCheckParams(params, appCtx, config.SupportsRawCapture && auditAppendRaw, retentionForValidation); err != nil {
+		return err
+	}
+
+	// Load engagement
+	eng, err := loadEngagementByID(params.ID)
+	if err != nil {
+		return err
+	}
+
+	startAll := time.Now()
+	dir := filepath.Join(appCtx.ResultsDir, params.ID)
+	_ = os.MkdirAll(dir, 0o755)
+
+	// Create checker using the provided factory function
+	chk := config.CreateChecker(appCtx, params)
+
+	// Create audit function using the provided factory
+	auditFn := config.CreateAuditFn(appCtx, params, chk)
+
+	// Create runner and execute checks
+	runner := &checker.Runner{
+		Concurrency: concurrency,
+		RateLimit:   rateLimit,
+		Timeout:     time.Duration(config.TimeoutSecs) * time.Second,
+	}
+
+	ctx := context.Background()
+	results := runner.RunChecks(ctx, eng.Scope, chk, auditFn)
+
+	// Write results and compute hashes
+	metadata := RunMetadata{
+		Operator:       appCtx.Operator,
+		EngagementID:   params.ID,
+		EngagementName: eng.Name,
+		Owner:          eng.Owner,
+		StartAt:        startAll,
+	}
+
+	resultsPath, auditPath, auditHash, resultsHash, err := writeResultsAndHash(
+		appCtx, params.ID, config.ResultsFilename, metadata, results, startAll,
+	)
+	if err != nil {
+		return err
+	}
+
+	// GPG signing if requested
+	if params.AutoSign {
+		if err := signHashFiles(auditPath, resultsPath, params.GPGKey); err != nil {
+			return err
 		}
-		b, _ := json.MarshalIndent(out, "", " ")
-		_ = os.WriteFile(resultsPath, b, 0o644)
+	}
 
-		// Compute hash for audit.csv
-		auditPath := filepath.Join(dir, "audit.csv")
-		auditHash, _ := HashFileSHA256(auditPath)
-
-		// Update metadata with audit hash only
-		out.Metadata.AuditHash = auditHash
-
-		// Write final results JSON
-		b, _ = json.MarshalIndent(out, "", " ")
-		_ = os.WriteFile(resultsPath, b, 0o644)
-
-		// Hash results.json AFTER final write
-		resultsHash, _ := HashFileSHA256(resultsPath)
-
-		// GPG signing if requested
-		if autoSign {
-			if gpgKey == "" {
-				return fmt.Errorf("--gpg-key required with --auto-sign")
-			}
-			signFile := func(path string) error {
-				cmd := exec.Command("gpg", "--armor", "--local-user", gpgKey, "--sign", path)
-				cmd.Dir = filepath.Dir(path)
-				cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-				return cmd.Run()
-			}
-
-			_ = signFile(auditPath + ".sha256")
-			_ = signFile(resultsPath + ".sha256")
-			fmt.Println("GPG signatures created for both .sha256 files.")
-		}
-
-		// Print summary
-		okCount := 0
-		errorCount := 0
-		for _, r := range results {
-			if r.Status == "ok" {
-				okCount++
-			} else {
-				errorCount++
-			}
-		}
-
-		fmt.Printf("DNS Check complete.\n")
+	// Print results summary
+	if config.PrintSummary != nil {
+		config.PrintSummary(results, resultsPath, auditPath, auditHash, resultsHash)
+	} else {
+		// Default summary
+		fmt.Printf("Run complete.\n")
 		fmt.Printf("Results: %s\nAudit: %s\n", resultsPath, auditPath)
 		fmt.Printf("SHA256 audit: %s\nSHA256 results: %s\n", auditHash, resultsHash)
-		fmt.Printf("Summary: %d OK, %d Errors (out of %d targets)\n", okCount, errorCount, len(results))
+	}
 
-		if complianceMode {
-			fmt.Println("------------------------------------------------------")
-			fmt.Println("🔒 Compliance Summary")
-			fmt.Printf("Operator: %s\nEngagement: %s (%s)\n", appCtx.Operator, eng.Name, eng.ID)
-			fmt.Printf("Audit hash : %s\nResults hash: %s\n", auditHash, resultsHash)
-			fmt.Println("Verification: sha256sum -c audit.csv.sha256 && sha256sum -c dns_results.json.sha256")
-			fmt.Println("Evidence integrity requirements satisfied.")
-			fmt.Println("------------------------------------------------------")
+	// Print compliance summary if in compliance mode
+	if params.ComplianceMode {
+		rawCaptureEnabled := config.SupportsRawCapture && auditAppendRaw
+		retentionDaysForSummary := 0
+		if rawCaptureEnabled {
+			retentionDaysForSummary = retentionDays
+		}
+		printComplianceSummary(
+			appCtx, eng, auditHash, resultsHash,
+			config.VerificationCmd,
+			rawCaptureEnabled, retentionDaysForSummary,
+		)
+	}
+
+	return nil
+}
+
+// validateCheckParams validates common check command parameters
+func validateCheckParams(params checkParams, appCtx *AppContext, auditAppendRaw bool, retentionDays int) error {
+	if params.ID == "" {
+		return fmt.Errorf("--id is required")
+	}
+
+	if !params.ROEConfirm {
+		return fmt.Errorf("this action requires --roe-confirm to proceed (ensures explicit written authorization)")
+	}
+
+	if appCtx.Operator == "" {
+		return fmt.Errorf("--operator is required")
+	}
+
+	if params.ComplianceMode {
+		fmt.Println("[Compliance Mode] Enabled")
+
+		if appCtx.Operator == "" {
+			return fmt.Errorf("--operator required in compliance mode")
 		}
 
-		return nil
-	},
+		fmt.Println("-> Hash-signing of audit and result files enforced")
+
+		// HTTP-specific validation
+		if auditAppendRaw && retentionDays <= 0 {
+			return fmt.Errorf("in compliance mode, --audit-append-raw requires --retention-days=<N>")
+		}
+	}
+
+	return nil
+}
+
+// loadEngagementByID loads and validates an engagement by ID
+func loadEngagementByID(id string) (*Engagement, error) {
+	engs := loadEngagements()
+	for i := range engs {
+		if engs[i].ID == id {
+			if len(engs[i].Scope) == 0 {
+				return nil, fmt.Errorf("no scope found for engagement %s", id)
+			}
+			return &engs[i], nil
+		}
+	}
+	return nil, fmt.Errorf("no engagement found with id %s", id)
+}
+
+// writeResultsAndHash writes results to JSON file, computes hashes, and returns paths and hashes
+func writeResultsAndHash(appCtx *AppContext, id string, resultsFilename string, metadata RunMetadata, results []checker.CheckResult, startTime time.Time) (resultsPath, auditPath, auditHash, resultsHash string, err error) {
+	dir := filepath.Join(appCtx.ResultsDir, id)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", "", "", "", fmt.Errorf("failed to create results directory: %w", err)
+	}
+
+	// Write results JSON (first pass without audit hash)
+	resultsPath = filepath.Join(dir, resultsFilename)
+	out := RunOutput{
+		Metadata: metadata,
+		Results:  results,
+	}
+
+	// Set completion time
+	out.Metadata.CompleteAt = time.Now().UTC()
+	out.Metadata.TotalTargets = len(results)
+
+	b, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		return "", "", "", "", fmt.Errorf("failed to marshal results: %w", err)
+	}
+
+	if err := os.WriteFile(resultsPath, b, 0o644); err != nil {
+		return "", "", "", "", fmt.Errorf("failed to write results: %w", err)
+	}
+
+	// Compute hash for audit.csv
+	auditPath = filepath.Join(dir, "audit.csv")
+	auditHash, err = HashFileSHA256(auditPath)
+	if err != nil {
+		return "", "", "", "", fmt.Errorf("failed to hash audit file: %w", err)
+	}
+
+	// Update metadata with audit hash and write final results JSON
+	out.Metadata.AuditHash = auditHash
+	b, err = json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		return "", "", "", "", fmt.Errorf("failed to marshal final results: %w", err)
+	}
+
+	if err := os.WriteFile(resultsPath, b, 0o644); err != nil {
+		return "", "", "", "", fmt.Errorf("failed to write final results: %w", err)
+	}
+
+	// Hash results.json AFTER final write
+	resultsHash, err = HashFileSHA256(resultsPath)
+	if err != nil {
+		return "", "", "", "", fmt.Errorf("failed to hash results file: %w", err)
+	}
+
+	return resultsPath, auditPath, auditHash, resultsHash, nil
+}
+
+// signHashFiles signs the .sha256 files using GPG
+func signHashFiles(auditPath, resultsPath, gpgKey string) error {
+	if gpgKey == "" {
+		return fmt.Errorf("--gpg-key required with --auto-sign")
+	}
+
+	signFile := func(path string) error {
+		cmd := exec.Command("gpg", "--armor", "--local-user", gpgKey, "--sign", path)
+		cmd.Dir = filepath.Dir(path)
+		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+		return cmd.Run()
+	}
+
+	if err := signFile(auditPath + ".sha256"); err != nil {
+		return fmt.Errorf("failed to sign audit hash file: %w", err)
+	}
+
+	if err := signFile(resultsPath + ".sha256"); err != nil {
+		return fmt.Errorf("failed to sign results hash file: %w", err)
+	}
+
+	fmt.Println("GPG signatures created for both .sha256 files.")
+	return nil
+}
+
+// printComplianceSummary prints the compliance mode summary
+func printComplianceSummary(appCtx *AppContext, eng *Engagement, auditHash, resultsHash string, verificationCmd string, auditAppendRaw bool, retentionDays int) {
+	fmt.Println("------------------------------------------------------")
+	fmt.Println("🔒 Compliance Summary")
+	fmt.Printf("Operator: %s\nEngagement: %s (%s)\n", appCtx.Operator, eng.Name, eng.ID)
+	fmt.Printf("Audit hash : %s\nResults hash: %s\n", auditHash, resultsHash)
+	fmt.Printf("Verification: %s\n", verificationCmd)
+	if auditAppendRaw {
+		fmt.Printf("Retention: raw captures must be deleted or anonymized after %d day(s).\n", retentionDays)
+	}
+	fmt.Println("Evidence integrity and retention requirements satisfied.")
+	fmt.Println("------------------------------------------------------")
 }
 
 func init() {
 	checkCmd.PersistentFlags().IntVarP(&concurrency, "concurrency", "c", 1, "max concurrent requests")
 	checkCmd.PersistentFlags().IntVarP(&rateLimit, "rate", "r", 1, "requests per second (global)")
 	checkCmd.PersistentFlags().IntVarP(&timeoutSecs, "timeout", "t", 10, "request timeout in seconds")
+	// HTTP command flags
 	checkHTTPCmd.Flags().String("id", "", "Engagement id")
 	checkHTTPCmd.Flags().Bool("roe-confirm", false, "Confirm you have explicit written authorization (required)")
 	checkHTTPCmd.Flags().BoolVar(&auditAppendRaw, "audit-append-raw", false, "Save limited raw headers/body for auditing (handle carefully)")
@@ -421,6 +444,13 @@ func init() {
 	checkHTTPCmd.Flags().IntVar(&retentionDays, "retention-days", 0, "Retention period (days) for raw captures; required in compliance mode if --audit-append-raw is used")
 	checkHTTPCmd.Flags().Bool("auto-sign", false, "Automatically sign .sha256 files using configured GPG key")
 	checkHTTPCmd.Flags().String("gpg-key", "", "GPG key ID or email for signing (required if --auto-sign)")
+
+	// DNS command flags
+	checkDNSCmd.Flags().String("id", "", "Engagement id")
+	checkDNSCmd.Flags().Bool("roe-confirm", false, "Confirm you have explicit written authorization (required)")
+	checkDNSCmd.Flags().Bool("compliance-mode", false, "Enable compliance enforcement (hashing, retention checks)")
+	checkDNSCmd.Flags().Bool("auto-sign", false, "Automatically sign .sha256 files using configured GPG key")
+	checkDNSCmd.Flags().String("gpg-key", "", "GPG key ID or email for signing (required if --auto-sign)")
 	checkDNSCmd.Flags().StringSliceVar(&dnsNameservers, "nameservers", []string{}, "Custom DNS nameservers (e.g., 8.8.8.8:53,1.1.1.1:53)")
 	checkDNSCmd.Flags().IntVar(&dnsTimeout, "dns-timeout", 10, "DNS query timeout in seconds")
 
