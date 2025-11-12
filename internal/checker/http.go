@@ -112,9 +112,25 @@ func (h *HTTPChecker) Check(ctx context.Context, target string) CheckResult {
 
 	// Optional raw response capture
 	if h.CaptureRaw && h.RawHandler != nil {
-		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-		_ = h.RawHandler(target, resp.Header, string(bodyBytes))
+		bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		if err != nil {
+			// Log but don't fail - partial body is acceptable
+			if result.Notes != "" {
+				result.Notes += fmt.Sprintf("; warning: failed to read response body: %v", err)
+			} else {
+				result.Notes = fmt.Sprintf("warning: failed to read response body: %v", err)
+			}
+		}
+		if err := h.RawHandler(target, resp.Header, string(bodyBytes)); err != nil {
+			// Log but don't fail - raw capture is optional
+			if result.Notes != "" {
+				result.Notes += fmt.Sprintf("; warning: failed to save raw capture: %v", err)
+			} else {
+				result.Notes = fmt.Sprintf("warning: failed to save raw capture: %v", err)
+			}
+		}
 	} else {
+		// Discard response body - ignore errors as this is just cleanup
 		_, _ = io.Copy(io.Discard, resp.Body)
 	}
 

@@ -52,8 +52,13 @@ func AppendAuditRow(resultsDir string, engagementID string, operatorName string,
 
 	// if new file, write header first
 	if !exists {
-		_ = writer.Write(auditHeader)
+		if err := writer.Write(auditHeader); err != nil {
+			return fmt.Errorf("write audit header failed: %w", err)
+		}
 		writer.Flush()
+		if err := writer.Error(); err != nil {
+			return fmt.Errorf("flush audit header failed: %w", err)
+		}
 	}
 
 	row := []string{
@@ -70,10 +75,16 @@ func AppendAuditRow(resultsDir string, engagementID string, operatorName string,
 		fmt.Sprintf("%.3f", durationSeconds),
 	}
 
-	_ = writer.Write(row)
+	if err := writer.Write(row); err != nil {
+		return fmt.Errorf("write audit row failed: %w", err)
+	}
 	writer.Flush()
 
-	return writer.Error()
+	if err := writer.Error(); err != nil {
+		return fmt.Errorf("flush audit data failed: %w", err)
+	}
+
+	return nil
 }
 
 // SaveRawCapture writes a limited raw HTTP response for auditing (be careful with PII)

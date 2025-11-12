@@ -225,7 +225,9 @@ func runCheckCommand(cmd *cobra.Command, config checkConfig) error {
 
 	startAll := time.Now()
 	dir := filepath.Join(appCtx.ResultsDir, params.ID)
-	_ = os.MkdirAll(dir, 0o755)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("failed to create results directory: %w", err)
+	}
 
 	// Create checker using the provided factory function
 	chk := config.CreateChecker(appCtx, params)

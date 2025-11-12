@@ -52,7 +52,14 @@ Documentation:
 			viper.SetConfigType("yaml")
 		}
 
-		_ = viper.ReadInConfig()
+		// Config file is optional, but we should be aware if there's an error reading it
+		if err := viper.ReadInConfig(); err != nil {
+			// Only log if a config file was explicitly specified
+			if cfgFile != "" {
+				fmt.Fprintf(os.Stderr, "Warning: Error reading config file %s: %v\n", cfgFile, err)
+			}
+			// Otherwise, it's fine if no config file exists (using defaults)
+		}
 
 		// Initialize AppContext
 		appCtx := &AppContext{}

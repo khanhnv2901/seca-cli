@@ -103,7 +103,8 @@ func migrateEngagementsFile(oldPath, newPath string) error {
 	// Backup old file instead of deleting
 	backupPath := oldPath + ".backup"
 	if err := os.Rename(oldPath, backupPath); err != nil {
-		// If rename fails, just delete the old file
+		// If rename fails, try to delete the old file
+		// Ignore error - data is already migrated, so cleanup failure is not critical
 		_ = os.Remove(oldPath)
 		return nil
 	}
