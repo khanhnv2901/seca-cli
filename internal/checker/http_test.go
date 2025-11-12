@@ -2,6 +2,7 @@ package checker
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -76,6 +77,31 @@ func TestHTTPChecker_CORSDetection(t *testing.T) {
 	}
 	if !result.CORSInsights.AllowCredentials {
 		t.Error("expected AllowCredentials to be true")
+	}
+}
+
+func TestHTTPChecker_ThirdPartyScripts(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, `
+		<html>
+			<head>
+				<script src="https://cdn.example.com/lib.js"></script>
+				<script src="/app.js"></script>
+			</head>
+		</html>`)
+	}))
+	defer server.Close()
+
+	checker := &HTTPChecker{Timeout: 5 * time.Second}
+	result := checker.Check(context.Background(), server.URL)
+
+	if len(result.ThirdPartyScripts) != 1 {
+		t.Fatalf("expected 1 third-party script, got %d", len(result.ThirdPartyScripts))
+	}
+	if !strings.Contains(result.ThirdPartyScripts[0], "cdn.example.com") {
+		t.Fatalf("unexpected script entry: %v", result.ThirdPartyScripts)
 	}
 }
 

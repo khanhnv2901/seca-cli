@@ -139,6 +139,11 @@
 {{range $result.CORSInsights.Issues}}- {{.}}
 {{end}}{{end}}
 {{end}}
+{{if $result.ThirdPartyScripts}}#### Third-Party Scripts (Supply Chain Visibility)
+{{range $result.ThirdPartyScripts}}
+- {{.}}
+{{end}}
+{{end}}
 {{if $result.Notes}}**Notes:** {{.Notes}}
 {{end}}
 {{if $result.DNSRecords}}#### DNS Records

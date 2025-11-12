@@ -1,6 +1,7 @@
 package checker
 
 import (
+	"bufio"
 	"context"
 	"crypto/tls"
 	"fmt"
@@ -19,6 +20,8 @@ type HTTPChecker struct {
 	CaptureRaw bool
 	RawHandler func(target string, headers http.Header, bodySnippet string) error
 }
+
+const bodySnippetLimit = 32768
 
 // Check performs an HTTP/HTTPS check on the target
 func (h *HTTPChecker) Check(ctx context.Context, target string) CheckResult {
@@ -49,6 +52,7 @@ func (h *HTTPChecker) Check(ctx context.Context, target string) CheckResult {
 	}
 
 	resp, err := client.Do(req)
+	usedGET := false
 	if err != nil {
 		// Fallback to GET (some servers disallow HEAD)
 		req2, err2 := http.NewRequestWithContext(ctx, "GET", u, nil)
@@ -65,6 +69,7 @@ func (h *HTTPChecker) Check(ctx context.Context, target string) CheckResult {
 			return result
 		}
 		resp = resp2
+		usedGET = true
 	}
 	defer resp.Body.Close()
 
@@ -131,33 +136,40 @@ func (h *HTTPChecker) Check(ctx context.Context, target string) CheckResult {
 		}
 	}
 
-	// Optional raw response capture
-	if h.CaptureRaw && h.RawHandler != nil {
-		bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, int64(consts.RawCaptureLimitBytes)))
-		if err != nil {
-			// Log but don't fail - partial body is acceptable
-			if result.Notes != "" {
-				result.Notes += fmt.Sprintf("; warning: failed to read response body: %v", err)
-			} else {
-				result.Notes = fmt.Sprintf("warning: failed to read response body: %v", err)
-			}
-		}
-		if err := h.RawHandler(target, resp.Header, string(bodyBytes)); err != nil {
-			// Log but don't fail - raw capture is optional
-			if result.Notes != "" {
-				result.Notes += fmt.Sprintf("; warning: failed to save raw capture: %v", err)
-			} else {
-				result.Notes = fmt.Sprintf("warning: failed to save raw capture: %v", err)
-			}
-		}
+	readLimit := int64(bodySnippetLimit)
+	if rawLimit := int64(consts.RawCaptureLimitBytes); rawLimit > readLimit {
+		readLimit = rawLimit
+	}
+	var bodySnippet []byte
+	var bodyErr error
+	if usedGET || (resp.Request != nil && resp.Request.Method == http.MethodGet) {
+		bodySnippet, bodyErr = readBodySnippet(resp.Body, readLimit)
 	} else {
-		// Discard response body - ignore errors as this is just cleanup
+		bodySnippet, bodyErr = fetchBodySnippet(ctx, client, u, readLimit)
 		_, _ = io.Copy(io.Discard, resp.Body)
+	}
+	if bodyErr != nil {
+		appendNote(&result, fmt.Sprintf("warning: failed to read response body: %v", bodyErr))
+	}
+	if h.CaptureRaw && h.RawHandler != nil && len(bodySnippet) > 0 {
+		rawBytes := bodySnippet
+		if len(rawBytes) > consts.RawCaptureLimitBytes {
+			rawBytes = rawBytes[:consts.RawCaptureLimitBytes]
+		}
+		if err := h.RawHandler(target, resp.Header, string(rawBytes)); err != nil {
+			appendNote(&result, fmt.Sprintf("warning: failed to save raw capture: %v", err))
+		}
 	}
 
 	// Check for robots.txt (safe, small GET)
 	if parsed != nil {
 		checkRobotsAndSitemap(ctx, client, parsed, &result)
+		if len(bodySnippet) > 0 {
+			if scripts := AnalyzeThirdPartyScripts(string(bodySnippet), parsed); len(scripts) > 0 {
+				result.ThirdPartyScripts = scripts
+				appendNote(&result, fmt.Sprintf("%d third-party script(s) detected", len(scripts)))
+			}
+		}
 	}
 
 	return result
@@ -182,14 +194,8 @@ func checkRobotsAndSitemap(ctx context.Context, client *http.Client, parsed *url
 	if err == nil {
 		defer robotsResp.Body.Close()
 		if robotsResp.StatusCode == http.StatusOK {
-			if result.Notes != "" {
-				result.Notes += "; robots.txt found"
-			} else {
-				result.Notes = "robots.txt found"
-			}
-			body, _ := io.ReadAll(io.LimitReader(robotsResp.Body, 4096))
-			result.SecurityHeaders = result.SecurityHeaders // placeholder: future integration
-			_ = body
+			data, _ := io.ReadAll(io.LimitReader(robotsResp.Body, 8192))
+			summarizeRobots(string(data), result)
 		}
 		_, _ = io.Copy(io.Discard, robotsResp.Body)
 	}
@@ -200,20 +206,41 @@ func checkRobotsAndSitemap(ctx context.Context, client *http.Client, parsed *url
 		if sitemapResp.StatusCode == http.StatusOK {
 			body, _ := io.ReadAll(io.LimitReader(sitemapResp.Body, 20480))
 			discovered := analyzeSitemapURLs(string(body))
-			if len(discovered) > 0 {
-				if result.Notes != "" {
-					result.Notes += "; sitemap discovered"
-				} else {
-					result.Notes = "sitemap discovered"
-				}
-				if result.SecurityHeaders == nil {
-					result.SecurityHeaders = &SecurityHeadersResult{}
-				}
-			}
 			addSitemapNote(result, discovered)
 		}
 		_, _ = io.Copy(io.Discard, sitemapResp.Body)
 	}
+}
+
+func summarizeRobots(content string, result *CheckResult) {
+	if content == "" {
+		appendNote(result, "robots.txt found")
+		return
+	}
+	scanner := bufio.NewScanner(strings.NewReader(content))
+	disallow := make([]string, 0)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.HasPrefix(strings.ToLower(line), "disallow:") {
+			path := strings.TrimSpace(line[len("Disallow:"):])
+			if path != "" {
+				disallow = append(disallow, path)
+			}
+		}
+	}
+	if len(disallow) == 0 {
+		appendNote(result, "robots.txt found")
+		return
+	}
+	preview := disallow
+	if len(preview) > 5 {
+		preview = preview[:5]
+	}
+	note := fmt.Sprintf("robots.txt discloses %d path(s): %s", len(disallow), strings.Join(preview, ", "))
+	appendNote(result, note)
 }
 
 func analyzeSitemapURLs(data string) []string {
@@ -230,6 +257,7 @@ func analyzeSitemapURLs(data string) []string {
 
 func addSitemapNote(result *CheckResult, urls []string) {
 	if len(urls) == 0 {
+		appendNote(result, "sitemap discovered")
 		return
 	}
 	preview := urls
@@ -237,9 +265,39 @@ func addSitemapNote(result *CheckResult, urls []string) {
 		preview = preview[:5]
 	}
 	note := fmt.Sprintf("sitemap exposes %d URL(s), sample: %s", len(urls), strings.Join(preview, ", "))
+	appendNote(result, note)
+}
+
+func appendNote(result *CheckResult, msg string) {
 	if result.Notes != "" {
-		result.Notes += "; " + note
+		result.Notes += "; " + msg
 	} else {
-		result.Notes = note
+		result.Notes = msg
 	}
+}
+
+func readBodySnippet(body io.ReadCloser, limit int64) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(body, limit))
+	if _, drainErr := io.Copy(io.Discard, body); err == nil && drainErr != nil {
+		err = drainErr
+	}
+	return data, err
+}
+
+func fetchBodySnippet(ctx context.Context, client *http.Client, target string, limit int64) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", target, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	data, readErr := io.ReadAll(io.LimitReader(resp.Body, limit))
+	if _, drainErr := io.Copy(io.Discard, resp.Body); readErr == nil && drainErr != nil {
+		readErr = drainErr
+	}
+	return data, readErr
 }

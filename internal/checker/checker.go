@@ -18,10 +18,11 @@ type CheckResult struct {
 	TLSExpiry       string                 `json:"tls_expiry,omitempty"`
 	DNSRecords      map[string]interface{} `json:"dns_records,omitempty"`
 	ResponseTime    float64                `json:"response_time_ms,omitempty"`
-	SecurityHeaders *SecurityHeadersResult `json:"security_headers,omitempty"`
-	TLSCompliance   *TLSComplianceResult   `json:"tls_compliance,omitempty"`
-	CookieFindings  []CookieFinding        `json:"cookie_findings,omitempty"`
-	CORSInsights    *CORSReport            `json:"cors,omitempty"`
+	SecurityHeaders  *SecurityHeadersResult `json:"security_headers,omitempty"`
+	TLSCompliance    *TLSComplianceResult   `json:"tls_compliance,omitempty"`
+	CookieFindings   []CookieFinding        `json:"cookie_findings,omitempty"`
+	CORSInsights     *CORSReport            `json:"cors,omitempty"`
+	ThirdPartyScripts []string              `json:"third_party_scripts,omitempty"`
 	Notes           string                 `json:"notes,omitempty"`
 	Error           string                 `json:"error,omitempty"`
 }

@@ -526,6 +526,12 @@ li {
             {{if $result.Notes}}<p><strong>Notes:</strong> {{ $result.Notes }}</p>{{end}}
         </div>
         {{end}}
+        {{if $result.ThirdPartyScripts}}
+        <div class="section">
+            <h4>Third-Party Scripts (Supply Chain)</h4>
+            <ul>{{range $result.ThirdPartyScripts}}<li>{{.}}</li>{{end}}</ul>
+        </div>
+        {{end}}
         {{if $result.Notes}}
         <div class="section">
             <h4>Additional Notes</h4>
