@@ -249,6 +249,42 @@ func TestDNSChecker_ContextCancellation(t *testing.T) {
 	}
 }
 
+func TestDNSChecker_StrictTimeoutError(t *testing.T) {
+	checker := &DNSChecker{
+		Timeout: time.Nanosecond,
+	}
+
+	ctx := context.Background()
+	result := checker.Check(ctx, "example.com")
+
+	if result.Status != "error" {
+		t.Errorf("expected error status due to timeout, got %q", result.Status)
+	}
+
+	if result.Error == "" {
+		t.Error("expected timeout error message")
+	}
+}
+
+func TestDNSChecker_ParentContextDeadline(t *testing.T) {
+	checker := &DNSChecker{
+		Timeout: 5 * time.Second,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Nanosecond)
+	defer cancel()
+
+	result := checker.Check(ctx, "example.com")
+
+	if result.Status != "error" {
+		t.Errorf("expected error status, got %s", result.Status)
+	}
+
+	if !strings.Contains(result.Error, "context deadline") && result.Error == "" {
+		t.Errorf("expected deadline error, got %q", result.Error)
+	}
+}
+
 func TestDNSChecker_EmptyNameServer(t *testing.T) {
 	// Test with empty nameserver list (should use system default)
 	checker := &DNSChecker{

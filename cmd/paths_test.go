@@ -178,3 +178,39 @@ func TestDataDirCreation(t *testing.T) {
 		_ = os.Remove(testFile) // Clean up
 	}
 }
+
+func TestGetDataDir_PermissionDenied(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission bits behave differently on Windows")
+	}
+
+	tmp := t.TempDir()
+	readOnly := filepath.Join(tmp, "readonly")
+	if err := os.Mkdir(readOnly, 0o500); err != nil {
+		t.Fatalf("failed to create readonly dir: %v", err)
+	}
+
+	t.Setenv("XDG_DATA_HOME", readOnly)
+
+	if _, err := getDataDir(); err == nil {
+		t.Fatal("expected error when creating data dir under read-only parent")
+	}
+}
+
+func TestGetResultsDir_PermissionDenied(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission bits behave differently on Windows")
+	}
+
+	tmp := t.TempDir()
+	readOnly := filepath.Join(tmp, "readonly")
+	if err := os.Mkdir(readOnly, 0o500); err != nil {
+		t.Fatalf("failed to create readonly dir: %v", err)
+	}
+
+	t.Setenv("XDG_DATA_HOME", readOnly)
+
+	if _, err := getResultsDir(); err == nil {
+		t.Fatal("expected error when creating results dir under read-only parent")
+	}
+}
