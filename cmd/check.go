@@ -40,6 +40,7 @@ var (
 	retentionDays  int
 	autoSign       bool
 	gpgKey         string
+	telemetryEnabled bool
 )
 
 var (
@@ -292,6 +293,13 @@ func runCheckCommand(cmd *cobra.Command, config checkConfig) error {
 		)
 	}
 
+	if telemetryEnabled {
+		runDuration := time.Since(startAll)
+		if err := recordTelemetry(appCtx, params.ID, chk.Name(), results, runDuration); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to record telemetry: %v\n", err)
+		}
+	}
+
 	return nil
 }
 
@@ -449,6 +457,7 @@ func init() {
 	checkCmd.PersistentFlags().IntVarP(&concurrency, "concurrency", "c", 1, "max concurrent requests")
 	checkCmd.PersistentFlags().IntVarP(&rateLimit, "rate", "r", 1, "requests per second (global)")
 	checkCmd.PersistentFlags().IntVarP(&timeoutSecs, "timeout", "t", 10, "request timeout in seconds")
+	checkCmd.PersistentFlags().BoolVar(&telemetryEnabled, "telemetry", false, "Record telemetry metrics (durations, success rates)")
 
 	// HTTP-specific flags
 	addCommonCheckFlags(checkHTTPCmd)
