@@ -67,3 +67,6 @@ release/
 
 # Backup files
 *.backup
+
+# Local Go build cache
+.gocache/
