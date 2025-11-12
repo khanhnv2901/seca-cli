@@ -5,6 +5,183 @@ All notable changes to SECA-CLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2025-01-15
+
+### Added
+
+#### Major Features
+- **Plugin System**: Extensible architecture for custom security checkers
+  - External plugin support via JSON definitions
+  - Plugin API version 1 with backward compatibility commitment
+  - Automatic command registration for plugins
+  - Plugin directory: `~/.local/share/seca-cli/plugins/`
+  - See [Plugin Development Guide](docs/developer-guide/plugin-development.md)
+
+- **Retry Mechanism**: Automatic retry of failed targets
+  - `--retry N` flag to retry failed targets up to N times
+  - Respects rate limiting and concurrency settings
+  - Saves all successful results from any attempt
+  - Improves reliability for flaky networks
+
+- **Telemetry & Metrics System**: Success rate tracking and trend analysis
+  - `--telemetry` flag to record metrics
+  - JSONL storage format for time-series data
+  - `seca report telemetry` command with ASCII graphs
+  - Success rate trends over time
+  - JSON export for external analysis
+
+- **Progress Display**: Live progress bars for long-running scans
+  - `--progress` flag for visual feedback
+  - Shows completion percentage and elapsed time
+  - Useful for large target sets
+
+- **Secure Results Encryption**: GPG encryption for audit logs and results
+  - `--secure-results` flag to encrypt evidence
+  - Automatic GPG encryption of audit.csv and results.json
+  - Supports custom GPG recipients
+  - Meets encryption-at-rest compliance requirements
+
+- **Multiple Hash Algorithms**: SHA-256 and SHA-512 support
+  - `--hash sha512` flag for stricter integrity verification
+  - Default remains SHA-256 for performance
+  - SHA-512 recommended for high-security environments
+  - NIST FIPS 180-4 compliant
+
+- **Interactive TUI**: Terminal UI for engagement management
+  - `seca tui` command launches interactive interface
+  - Visual engagement browser with arrow key navigation
+  - Create, view, delete engagements interactively
+  - Color-coded status indicators
+
+#### New Commands
+
+**Engagement Management:**
+- `seca engagement view --id <id>` - Display engagement details as JSON
+- `seca engagement delete --id <id>` - Delete engagement and all associated data
+- `seca tui` - Launch interactive Terminal UI
+
+**Reporting:**
+- `seca report stats --id <id>` - Display engagement statistics with multiple format options
+- `seca report telemetry --id <id>` - Show success rate trends over time
+- `seca report generate --id <id>` - Generate reports in markdown/HTML/PDF/JSON formats
+
+**Check Enhancements:**
+- Custom plugin checks: `seca check <plugin-name>`
+- Enhanced DNS checks with `--nameservers` flag for custom DNS servers
+
+#### New Flags
+
+**Check Commands:**
+- `--retry N` - Retry failed targets N times
+- `--progress` - Display live progress bar
+- `--telemetry` - Record telemetry metrics
+- `--hash sha512` - Use SHA-512 instead of SHA-256
+- `--secure-results` - Encrypt results with GPG
+- `--nameservers` - Custom DNS nameservers (DNS checks)
+- `--dns-timeout` - DNS query timeout in seconds
+
+**Report Commands:**
+- `--format` - Output format (table/json/csv/markdown for stats; graph/json for telemetry)
+
+#### Advanced Security Analysis
+
+- **Cookie Security Analysis**: Secure/HttpOnly flag detection (OWASP A1:2021)
+- **CORS Policy Inspection**: Cross-origin policy validation (OWASP A5:2021)
+- **Third-Party Script Inventory**: Supply-chain risk detection
+- **Cache Policy Analysis**: Performance and security cache header evaluation
+- **robots.txt & sitemap.xml Parsing**: Web crawler policy and site structure analysis
+
+#### Graceful Cancellation
+
+- Press `Ctrl-C` to gracefully cancel scans
+- Partial results saved with integrity hashes
+- Audit trail updated for completed targets
+- Press `Ctrl-C` twice to force quit
+
+#### Documentation
+
+**New Comprehensive Guides** (~15,000 lines):
+- **[Plugin Development Guide](docs/developer-guide/plugin-development.md)** - Complete plugin API documentation
+  - Plugin architecture and lifecycle
+  - JSON definition format reference
+  - Output format specifications
+  - 3 example plugins (Bash, Python, Go)
+  - Testing and debugging guide
+
+- **[Advanced Features Guide](docs/user-guide/advanced-features.md)** - In-depth feature documentation
+  - Retry mechanism usage and strategies
+  - Progress display modes
+  - Telemetry system and analysis
+  - Secure results encryption with GPG
+  - SHA-256 vs SHA-512 comparison
+  - Custom DNS nameservers
+  - Graceful cancellation workflow
+  - TUI usage guide
+
+- **[Command Reference](docs/reference/command-reference.md)** - Complete command documentation
+  - All commands and subcommands
+  - Comprehensive flag reference
+  - Examples for every command
+  - Exit codes and error handling
+  - Flag precedence rules
+  - Common flag combinations
+
+- **[Troubleshooting Guide](docs/reference/troubleshooting.md)** - Problem-solving reference
+  - Installation issues
+  - Engagement management errors
+  - Check command troubleshooting
+  - Plugin debugging
+  - GPG and signing problems
+  - Performance optimization
+  - Network connectivity issues
+  - Comprehensive FAQ
+
+**Updated Documentation:**
+- README.md - Updated with all new features and plugin system
+- docs/README.md - Updated documentation index with new guides
+- Added Developer Guides category to documentation structure
+
+### Changed
+
+- **Engagement Command Updates**:
+  - `seca engagement create` now uses `--id`, `--client`, and `--start-date` flags
+  - Simplified engagement creation workflow
+  - ROE acceptance integrated into engagement definition
+
+- **Data Directory Structure**:
+  - Added `plugins/` directory for plugin definitions
+  - Added `telemetry/` directory for metrics storage
+  - Telemetry stored as JSONL files per engagement
+
+- **Report Generation**:
+  - Enhanced statistics with colorized CLI output
+  - Multiple export formats (table, JSON, CSV, markdown)
+  - Improved error summaries and trending
+
+### Improved
+
+- **Performance**: Optimized concurrent request handling
+- **Error Messages**: More descriptive error messages with troubleshooting hints
+- **Compliance**: Enhanced compliance mode with stricter validation
+- **Testing**: Expanded test coverage for new features
+- **User Experience**: Interactive TUI for easier engagement management
+
+### Fixed
+
+- Improved error handling for network timeouts
+- Better validation of engagement IDs
+- Enhanced GPG error messages
+- Fixed edge cases in retry logic
+
+### Security
+
+- GPG encryption for sensitive results
+- SHA-512 support for maximum integrity assurance
+- Plugin sandboxing considerations documented
+- Secure defaults for all new features
+
+---
+
 ## [1.0.0] - 2025-01-15
 
 ### Added
