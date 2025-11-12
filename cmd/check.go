@@ -56,6 +56,9 @@ var checkHTTPCmd = &cobra.Command{
 	Use:   "http",
 	Short: "Run safe HTTP/TLS checks for an engagement's scope",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Get application context
+		appCtx := getAppContext(cmd)
+
 		id, _ := cmd.Flags().GetString("id")
 
 		// Safety: require explicit ROE flag for any run
@@ -76,7 +79,7 @@ var checkHTTPCmd = &cobra.Command{
 			return fmt.Errorf("this action requires --roe-confirm to proceed (ensures explicit written authorization)")
 		}
 
-		if operator == "" {
+		if appCtx.Operator == "" {
 			return fmt.Errorf("--operator is required")
 		}
 
@@ -84,7 +87,7 @@ var checkHTTPCmd = &cobra.Command{
 			fmt.Println("[Compliance Mode] Enabled")
 
 			// Require operator
-			if operator == "" {
+			if appCtx.Operator == "" {
 				return fmt.Errorf("--operator required in compliance mode")
 			}
 
@@ -116,7 +119,7 @@ var checkHTTPCmd = &cobra.Command{
 		}
 
 		startAll := time.Now()
-		dir := filepath.Join(resultsDir, id)
+		dir := filepath.Join(appCtx.ResultsDir, id)
 		_ = os.MkdirAll(dir, 0o755)
 
 		// Create HTTP checker
@@ -124,15 +127,16 @@ var checkHTTPCmd = &cobra.Command{
 			Timeout:    time.Duration(timeoutSecs) * time.Second,
 			CaptureRaw: auditAppendRaw,
 			RawHandler: func(target string, headers http.Header, bodySnippet string) error {
-				return SaveRawCapture(id, target, headers, bodySnippet)
+				return SaveRawCapture(appCtx.ResultsDir, id, target, headers, bodySnippet)
 			},
 		}
 
 		// Create audit function
 		auditFn := func(target string, result checker.CheckResult, duration float64) error {
 			return AppendAuditRow(
+				appCtx.ResultsDir,
 				id,
-				operator,
+				appCtx.Operator,
 				httpChecker.Name(),
 				target,
 				result.Status,
@@ -158,7 +162,7 @@ var checkHTTPCmd = &cobra.Command{
 		resultsPath := filepath.Join(dir, "results.json")
 		out := RunOutput{
 			Metadata: RunMetadata{
-				Operator:       operator,
+				Operator:       appCtx.Operator,
 				EngagementID:   id,
 				EngagementName: eng.Name,
 				Owner:          eng.Owner,
@@ -209,7 +213,7 @@ var checkHTTPCmd = &cobra.Command{
 		if complianceMode {
 			fmt.Println("------------------------------------------------------")
 			fmt.Println("🔒 Compliance Summary")
-			fmt.Printf("Operator: %s\nEngagement: %s (%s)\n", operator, eng.Name, eng.ID)
+			fmt.Printf("Operator: %s\nEngagement: %s (%s)\n", appCtx.Operator, eng.Name, eng.ID)
 			fmt.Printf("Audit hash : %s\nResults hash: %s\n", auditHash, resultsHash)
 			fmt.Println("Verification: sha256sum -c audit.csv.sha256 && sha256sum -c results_*.sha256")
 			if auditAppendRaw {
@@ -238,6 +242,9 @@ var checkDNSCmd = &cobra.Command{
 
 All checks are safe, non-intrusive DNS queries only.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Get application context
+		appCtx := getAppContext(cmd)
+
 		id, _ := cmd.Flags().GetString("id")
 
 		// Safety: require explicit ROE flag for any run
@@ -258,7 +265,7 @@ All checks are safe, non-intrusive DNS queries only.`,
 			return fmt.Errorf("this action requires --roe-confirm to proceed (ensures explicit written authorization)")
 		}
 
-		if operator == "" {
+		if appCtx.Operator == "" {
 			return fmt.Errorf("--operator is required")
 		}
 
@@ -266,7 +273,7 @@ All checks are safe, non-intrusive DNS queries only.`,
 			fmt.Println("[Compliance Mode] Enabled")
 
 			// Require operator
-			if operator == "" {
+			if appCtx.Operator == "" {
 				return fmt.Errorf("--operator required in compliance mode")
 			}
 
@@ -292,7 +299,7 @@ All checks are safe, non-intrusive DNS queries only.`,
 		}
 
 		startAll := time.Now()
-		dir := filepath.Join(resultsDir, id)
+		dir := filepath.Join(appCtx.ResultsDir, id)
 		_ = os.MkdirAll(dir, 0o755)
 
 		// Create DNS checker
@@ -305,7 +312,8 @@ All checks are safe, non-intrusive DNS queries only.`,
 		auditFn := func(target string, result checker.CheckResult, duration float64) error {
 			// For DNS checks, we don;t have HTTP status
 			return AppendAuditRow(
-				id, operator, dnsChecker.Name(), target, result.Status,
+				appCtx.ResultsDir,
+				id, appCtx.Operator, dnsChecker.Name(), target, result.Status,
 				0,  // No HTTP status for DNS
 				"", // No TLS expiry for DNS
 				result.Notes,
@@ -328,7 +336,7 @@ All checks are safe, non-intrusive DNS queries only.`,
 		resultsPath := filepath.Join(dir, "dns_results.json")
 		out := RunOutput{
 			Metadata: RunMetadata{
-				Operator:       operator,
+				Operator:       appCtx.Operator,
 				EngagementID:   id,
 				EngagementName: eng.Name,
 				Owner:          eng.Owner,
@@ -391,7 +399,7 @@ All checks are safe, non-intrusive DNS queries only.`,
 		if complianceMode {
 			fmt.Println("------------------------------------------------------")
 			fmt.Println("🔒 Compliance Summary")
-			fmt.Printf("Operator: %s\nEngagement: %s (%s)\n", operator, eng.Name, eng.ID)
+			fmt.Printf("Operator: %s\nEngagement: %s (%s)\n", appCtx.Operator, eng.Name, eng.ID)
 			fmt.Printf("Audit hash : %s\nResults hash: %s\n", auditHash, resultsHash)
 			fmt.Println("Verification: sha256sum -c audit.csv.sha256 && sha256sum -c dns_results.json.sha256")
 			fmt.Println("Evidence integrity requirements satisfied.")

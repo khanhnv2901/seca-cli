@@ -26,6 +26,9 @@ var reportGenerateCmd = &cobra.Command{
 	Use:   "generate",
 	Short: "Generate report for an engagement",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Get application context
+		appCtx := getAppContext(cmd)
+
 		id, _ := cmd.Flags().GetString("id")
 		format, _ := cmd.Flags().GetString("format")
 
@@ -40,7 +43,7 @@ var reportGenerateCmd = &cobra.Command{
 		}
 
 		// Read results from results directory
-		path := filepath.Join(resultsDir, id, "results.json")
+		path := filepath.Join(appCtx.ResultsDir, id, "results.json")
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			return fmt.Errorf("no results found at %s", path)
 		}
@@ -77,7 +80,7 @@ var reportGenerateCmd = &cobra.Command{
 		}
 
 		// Write report to file
-		reportPath := filepath.Join(resultsDir, id, filename)
+		reportPath := filepath.Join(appCtx.ResultsDir, id, filename)
 		if err := os.WriteFile(reportPath, []byte(reportContent), 0644); err != nil {
 			return fmt.Errorf("failed to write report: %w", err)
 		}
@@ -236,8 +239,11 @@ var reportStatsCmd = &cobra.Command{
 	Use:   "stats",
 	Short: "Show analytics summary for engagement",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Get application context
+		appCtx := getAppContext(cmd)
+
 		id, _ := cmd.Flags().GetString("id")
-		path := filepath.Join(resultsDir, id, "results.json")
+		path := filepath.Join(appCtx.ResultsDir, id, "results.json")
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return err

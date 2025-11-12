@@ -17,6 +17,9 @@ var infoCmd = &cobra.Command{
   - Current operator
   - Platform information`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Get application context
+		appCtx := getAppContext(cmd)
+
 		// Get data directory
 		dataDir, err := getDataDir()
 		if err != nil {
@@ -29,12 +32,6 @@ var infoCmd = &cobra.Command{
 			return fmt.Errorf("failed to get engagements file path: %w", err)
 		}
 
-		// Get results directory
-		resultsDir, err := getResultsDir()
-		if err != nil {
-			return fmt.Errorf("failed to get results directory: %w", err)
-		}
-
 		// Check if files exist
 		engagementsExists := "✗ (not created yet)"
 		if _, err := os.Stat(engagementsPath); err == nil {
@@ -42,7 +39,7 @@ var infoCmd = &cobra.Command{
 		}
 
 		resultsExists := "✗ (not created yet)"
-		if _, err := os.Stat(resultsDir); err == nil {
+		if _, err := os.Stat(appCtx.ResultsDir); err == nil {
 			resultsExists = "✓ (exists)"
 		}
 
@@ -62,12 +59,12 @@ var infoCmd = &cobra.Command{
 		fmt.Fprintln(out, "============================")
 		fmt.Fprintln(out)
 		fmt.Fprintf(out, "Platform:          %s/%s\n", runtime.GOOS, runtime.GOARCH)
-		fmt.Fprintf(out, "Operator:          %s\n", operator)
+		fmt.Fprintf(out, "Operator:          %s\n", appCtx.Operator)
 		fmt.Fprintln(out)
 		fmt.Fprintln(out, "Data Locations:")
 		fmt.Fprintf(out, "  Data Directory:     %s\n", dataDir)
 		fmt.Fprintf(out, "  Engagements File:   %s %s\n", engagementsPath, engagementsExists)
-		fmt.Fprintf(out, "  Results Directory:  %s %s\n", resultsDir, resultsExists)
+		fmt.Fprintf(out, "  Results Directory:  %s %s\n", appCtx.ResultsDir, resultsExists)
 		fmt.Fprintln(out)
 		fmt.Fprintf(out, "Configuration File:   %s %s\n", configFile, configExists)
 		fmt.Fprintln(out)

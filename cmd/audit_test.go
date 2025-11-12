@@ -14,10 +14,6 @@ func TestAppendAuditRow(t *testing.T) {
 	engagementID := "test123"
 	defer os.RemoveAll(tmpDir)
 
-	origResultsDir := resultsDir
-	resultsDir = tmpDir
-	defer func() { resultsDir = origResultsDir }()
-
 	// Create directory
 	if err := os.MkdirAll(filepath.Join(tmpDir, engagementID), 0755); err != nil {
 		t.Fatalf("Failed to create directory: %v", err)
@@ -25,6 +21,7 @@ func TestAppendAuditRow(t *testing.T) {
 
 	// Test data
 	err := AppendAuditRow(
+		tmpDir, // resultsDir parameter
 		engagementID,
 		"test-operator",
 		"check http",
@@ -104,10 +101,6 @@ func TestAppendAuditRow_MultipleRows(t *testing.T) {
 	engagementID := "test456"
 	defer os.RemoveAll(tmpDir)
 
-	origResultsDir := resultsDir
-	resultsDir = tmpDir
-	defer func() { resultsDir = origResultsDir }()
-
 	if err := os.MkdirAll(filepath.Join(tmpDir, engagementID), 0755); err != nil {
 		t.Fatalf("Failed to create directory: %v", err)
 	}
@@ -115,6 +108,7 @@ func TestAppendAuditRow_MultipleRows(t *testing.T) {
 	// Append multiple rows
 	for i := 0; i < 3; i++ {
 		err := AppendAuditRow(
+			tmpDir, // resultsDir parameter
 			engagementID,
 			"operator",
 			"check http",
@@ -149,16 +143,13 @@ func TestAppendAuditRow_WithError(t *testing.T) {
 	engagementID := "test789"
 	defer os.RemoveAll(tmpDir)
 
-	origResultsDir := resultsDir
-	resultsDir = tmpDir
-	defer func() { resultsDir = origResultsDir }()
-
 	if err := os.MkdirAll(filepath.Join(tmpDir, engagementID), 0755); err != nil {
 		t.Fatalf("Failed to create directory: %v", err)
 	}
 
 	// Test with error
 	err := AppendAuditRow(
+		tmpDir, // resultsDir parameter
 		engagementID,
 		"operator",
 		"check http",
@@ -196,10 +187,6 @@ func TestSaveRawCapture(t *testing.T) {
 	engagementID := "rawtest123"
 	defer os.RemoveAll(tmpDir)
 
-	origResultsDir := resultsDir
-	resultsDir = tmpDir
-	defer func() { resultsDir = origResultsDir }()
-
 	// Test data
 	headers := map[string][]string{
 		"Content-Type":   {"text/html"},
@@ -208,7 +195,7 @@ func TestSaveRawCapture(t *testing.T) {
 	}
 	bodySnippet := "<html><body>Test content</body></html>"
 
-	err := SaveRawCapture(engagementID, "https://example.com", headers, bodySnippet)
+	err := SaveRawCapture(tmpDir, engagementID, "https://example.com", headers, bodySnippet)
 	if err != nil {
 		t.Fatalf("SaveRawCapture failed: %v", err)
 	}

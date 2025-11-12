@@ -27,7 +27,7 @@ var auditHeader = []string{
 }
 
 // AppendAuditRow appends a single audit row to results/<engagementID>/audit.csv
-func AppendAuditRow(engagementID string, operatorName string, commandName string, target string, status string, httpStatus int, tlsExpiry string, notes string, errMsg string, durationSeconds float64) error {
+func AppendAuditRow(resultsDir string, engagementID string, operatorName string, commandName string, target string, status string, httpStatus int, tlsExpiry string, notes string, errMsg string, durationSeconds float64) error {
 	// ensure engagement-specific directory under resultsDir
 	dir := filepath.Join(resultsDir, engagementID)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -77,7 +77,7 @@ func AppendAuditRow(engagementID string, operatorName string, commandName string
 }
 
 // SaveRawCapture writes a limited raw HTTP response for auditing (be careful with PII)
-func SaveRawCapture(engamentID, target string, headers map[string][]string, bodySnippet string) error {
+func SaveRawCapture(resultsDir string, engamentID, target string, headers map[string][]string, bodySnippet string) error {
 	dir := filepath.Join(resultsDir, engamentID)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err

@@ -8,7 +8,22 @@ import (
 	"testing"
 )
 
+// setupTestAppContext initializes the globalAppContext for tests
+func setupTestAppContext() func() {
+	originalAppCtx := globalAppContext
+	globalAppContext = &AppContext{
+		Logger:     nil, // Not needed for most tests
+		Operator:   "test-operator",
+		ResultsDir: "/tmp/test-results",
+	}
+	return func() {
+		globalAppContext = originalAppCtx
+	}
+}
+
 func TestInfoCommand(t *testing.T) {
+	defer setupTestAppContext()()
+
 	// Capture output
 	var buf bytes.Buffer
 	infoCmd.SetOut(&buf)
@@ -48,6 +63,8 @@ func TestInfoCommand(t *testing.T) {
 }
 
 func TestInfoCommand_ShowsDataDirectory(t *testing.T) {
+	defer setupTestAppContext()()
+
 	// Get expected data directory
 	dataDir, err := getDataDir()
 	if err != nil {
@@ -74,6 +91,8 @@ func TestInfoCommand_ShowsDataDirectory(t *testing.T) {
 }
 
 func TestInfoCommand_ShowsEngagementsPath(t *testing.T) {
+	defer setupTestAppContext()()
+
 	// Get expected engagements path
 	engagementsPath, err := getEngagementsFilePath()
 	if err != nil {
@@ -100,11 +119,10 @@ func TestInfoCommand_ShowsEngagementsPath(t *testing.T) {
 }
 
 func TestInfoCommand_ShowsResultsDirectory(t *testing.T) {
-	// Get expected results directory
-	resultsDir, err := getResultsDir()
-	if err != nil {
-		t.Fatalf("Failed to get results directory: %v", err)
-	}
+	defer setupTestAppContext()()
+
+	// Get expected results directory from appContext (which overrides the default)
+	expectedResultsDir := globalAppContext.ResultsDir
 
 	// Capture output
 	var buf bytes.Buffer
@@ -112,7 +130,7 @@ func TestInfoCommand_ShowsResultsDirectory(t *testing.T) {
 	infoCmd.SetErr(&buf)
 
 	// Execute command
-	err = infoCmd.RunE(infoCmd, []string{})
+	err := infoCmd.RunE(infoCmd, []string{})
 	if err != nil {
 		t.Fatalf("info command failed: %v", err)
 	}
@@ -120,12 +138,14 @@ func TestInfoCommand_ShowsResultsDirectory(t *testing.T) {
 	output := buf.String()
 
 	// Verify results directory is shown
-	if !strings.Contains(output, resultsDir) {
-		t.Errorf("Expected output to contain results directory '%s', got:\n%s", resultsDir, output)
+	if !strings.Contains(output, expectedResultsDir) {
+		t.Errorf("Expected output to contain results directory '%s', got:\n%s", expectedResultsDir, output)
 	}
 }
 
 func TestInfoCommand_ShowsFileExistence(t *testing.T) {
+	defer setupTestAppContext()()
+
 	// Create test engagements file
 	cleanup := setupTestEngagements(t)
 	defer cleanup()
@@ -166,6 +186,8 @@ func TestInfoCommand_ShowsFileExistence(t *testing.T) {
 }
 
 func TestInfoCommand_ShowsConfigInfo(t *testing.T) {
+	defer setupTestAppContext()()
+
 	// Capture output
 	var buf bytes.Buffer
 	infoCmd.SetOut(&buf)
@@ -192,6 +214,8 @@ func TestInfoCommand_ShowsConfigInfo(t *testing.T) {
 }
 
 func TestInfoCommand_ShowsDocumentation(t *testing.T) {
+	defer setupTestAppContext()()
+
 	// Capture output
 	var buf bytes.Buffer
 	infoCmd.SetOut(&buf)
@@ -220,6 +244,8 @@ func TestInfoCommand_ShowsDocumentation(t *testing.T) {
 }
 
 func TestInfoCommand_ShowsOverrideInstructions(t *testing.T) {
+	defer setupTestAppContext()()
+
 	// Capture output
 	var buf bytes.Buffer
 	infoCmd.SetOut(&buf)
@@ -244,10 +270,7 @@ func TestInfoCommand_ShowsOverrideInstructions(t *testing.T) {
 }
 
 func TestInfoCommand_WithOperator(t *testing.T) {
-	// Set operator
-	originalOperator := operator
-	operator = "test-operator"
-	defer func() { operator = originalOperator }()
+	defer setupTestAppContext()()
 
 	// Capture output
 	var buf bytes.Buffer
@@ -269,6 +292,8 @@ func TestInfoCommand_WithOperator(t *testing.T) {
 }
 
 func TestInfoCommand_DataDirError(t *testing.T) {
+	defer setupTestAppContext()()
+
 	// This test verifies that if getDataDir fails, the command returns an error
 	// In normal circumstances, getDataDir should not fail, but we test the error path
 
@@ -291,6 +316,8 @@ func TestInfoCommand_DataDirError(t *testing.T) {
 }
 
 func TestInfoCommand_PlatformSpecific(t *testing.T) {
+	defer setupTestAppContext()()
+
 	// Capture output
 	var buf bytes.Buffer
 	infoCmd.SetOut(&buf)
