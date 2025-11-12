@@ -41,6 +41,7 @@ var (
 	autoSign         bool
 	gpgKey           string
 	telemetryEnabled bool
+	progressEnabled  bool
 )
 
 var (
@@ -236,6 +237,27 @@ func runCheckCommand(cmd *cobra.Command, config checkConfig) error {
 	// Create audit function using the provided factory
 	auditFn := config.CreateAuditFn(appCtx, params, chk)
 
+	var progress *progressPrinter
+	if progressEnabled {
+		progress = newProgressPrinter(len(eng.Scope), chk.Name())
+		progress.Start()
+		if auditFn != nil {
+			orig := auditFn
+			auditFn = func(target string, result checker.CheckResult, duration float64) error {
+				if err := orig(target, result, duration); err != nil {
+					return err
+				}
+				progress.Increment(result.Status == "ok", duration)
+				return nil
+			}
+		} else {
+			auditFn = func(target string, result checker.CheckResult, duration float64) error {
+				progress.Increment(result.Status == "ok", duration)
+				return nil
+			}
+		}
+	}
+
 	// Create runner and execute checks
 	runner := &checker.Runner{
 		Concurrency: concurrency,
@@ -245,6 +267,10 @@ func runCheckCommand(cmd *cobra.Command, config checkConfig) error {
 
 	ctx := context.Background()
 	results := runner.RunChecks(ctx, eng.Scope, chk, auditFn)
+
+	if progress != nil {
+		progress.Stop()
+	}
 
 	// Write results and compute hashes
 	metadata := RunMetadata{
@@ -458,6 +484,7 @@ func init() {
 	checkCmd.PersistentFlags().IntVarP(&rateLimit, "rate", "r", 1, "requests per second (global)")
 	checkCmd.PersistentFlags().IntVarP(&timeoutSecs, "timeout", "t", 10, "request timeout in seconds")
 	checkCmd.PersistentFlags().BoolVar(&telemetryEnabled, "telemetry", false, "Record telemetry metrics (durations, success rates)")
+	checkCmd.PersistentFlags().BoolVar(&progressEnabled, "progress", false, "Display live progress for checks")
 
 	// HTTP-specific flags
 	addCommonCheckFlags(checkHTTPCmd)

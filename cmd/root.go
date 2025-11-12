@@ -170,5 +170,6 @@ func init() {
 	rootCmd.AddCommand(engagementCmd)
 	rootCmd.AddCommand(checkCmd)
 	rootCmd.AddCommand(reportCmd)
+	rootCmd.AddCommand(tuiCmd)
 	rootCmd.AddCommand(versionCmd)
 }

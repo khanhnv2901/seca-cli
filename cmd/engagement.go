@@ -80,30 +80,7 @@ var engagementAddScopeCmd = &cobra.Command{
 			return fmt.Errorf("--id is required")
 		}
 		add, _ := cmd.Flags().GetStringSlice("scope")
-		if len(add) == 0 {
-			return errors.New("--scope must contain one or more hosts/urls")
-		}
-
-		normalizedScope, err := normalizeScopeEntries(id, add)
-		if err != nil {
-			return err
-		}
-
-		list := loadEngagements()
-		found := false
-		for i := range list {
-			if list[i].ID == id {
-				list[i].Scope = append(list[i].Scope, normalizedScope...)
-				found = true
-				break
-			}
-		}
-		if !found {
-			return fmt.Errorf("no engagement found with id %s", id)
-		}
-		saveEngagements(list)
-		fmt.Printf("Added scope %s to engagement %s\n", add, id)
-		return nil
+		return addScopeEntries(id, add)
 	},
 }
 
@@ -166,6 +143,36 @@ func saveEngagements(list []Engagement) {
 var allowedScopeSchemes = map[string]struct{}{
 	"http":  {},
 	"https": {},
+}
+
+func addScopeEntries(id string, entries []string) error {
+	if id == "" {
+		return errors.New("--id is required")
+	}
+	if len(entries) == 0 {
+		return errors.New("--scope must contain one or more hosts/urls")
+	}
+
+	normalizedScope, err := normalizeScopeEntries(id, entries)
+	if err != nil {
+		return err
+	}
+
+	list := loadEngagements()
+	found := false
+	for i := range list {
+		if list[i].ID == id {
+			list[i].Scope = append(list[i].Scope, normalizedScope...)
+			found = true
+			break
+		}
+	}
+	if !found {
+		return &EngagementNotFoundError{ID: id}
+	}
+	saveEngagements(list)
+	fmt.Printf("Added scope %v to engagement %s\n", normalizedScope, id)
+	return nil
 }
 
 func normalizeScopeEntries(scopeID string, entries []string) ([]string, error) {
