@@ -9,16 +9,42 @@ A professional command-line tool for managing authorized security testing engage
 
 ## Features
 
-- **Engagement Management** - Create and track security testing engagements with ROE (Rules of Engagement) acknowledgment
+### Core Capabilities
+
+- **Engagement Management** - Create, view, delete, and track security testing engagements with ROE (Rules of Engagement) acknowledgment
+- **Interactive TUI** - Terminal UI for visual engagement browsing and management
 - **Scope Control** - Define and manage authorized targets for testing
 - **Safe HTTP Checks** - Perform non-invasive HTTP/HTTPS checks with rate limiting and concurrency control
+- **DNS Resolution Checks** - Comprehensive DNS record analysis (A, AAAA, CNAME, MX, NS, TXT, PTR)
 - **TLS/Crypto Compliance** - OWASP ASVS §9 and PCI DSS 4.1 validation for TLS versions, cipher suites, and certificates
 - **Security Headers Analysis** - OWASP Secure Headers Project compliance checking with scoring and recommendations
+
+### Advanced Security Analysis
+
+- **Cookie Security** - Secure/HttpOnly flag detection for OWASP A1:2021 compliance
+- **CORS Policy Inspection** - OWASP A5:2021 cross-origin policy validation
+- **Third-Party Scripts** - Supply-chain risk inventory and detection
+- **Cache Policy Analysis** - Performance and security cache header evaluation
+- **robots.txt & sitemap.xml** - Web crawler policy and site structure parsing
+
+### Compliance & Evidence
+
 - **Compliance Mode** - Built-in compliance enforcement with automatic hash signing and retention policies
 - **Audit Trail** - Immutable CSV audit logs with timestamps and operator attribution
-- **Evidence Integrity** - SHA256 hash generation and verification for all evidence files
+- **Evidence Integrity** - SHA-256 and SHA-512 hash generation for cryptographic verification
+- **Secure Results** - GPG encryption for audit logs and results
 - **Raw Capture** - Optional HTTP response capture with PII safeguards and retention controls
 - **TLS Monitoring** - Automatic TLS certificate expiry detection and warnings
+
+### Advanced Features
+
+- **Retry Mechanism** - Automatic retry of failed targets (--retry N flag)
+- **Progress Display** - Live progress bars for long-running scans
+- **Telemetry & Metrics** - Success rate tracking with trend analysis and ASCII graphs
+- **Plugin Architecture** - Extensible checker system with external plugin support
+- **Graceful Cancellation** - Ctrl-C saves partial results with integrity verification
+- **Custom DNS Servers** - Specify nameservers for internal or specialized DNS queries
+- **Report Generation** - Markdown, HTML, PDF, and JSON reports with statistics
 
 ## Data Storage
 
@@ -195,28 +221,61 @@ For regulated environments, use compliance mode:
 
 ```bash
 # Create engagement
-seca engagement create --name <name> --owner <email> --roe <text> --roe-agree
+seca engagement create --id <id> --client <name> --start-date <YYYY-MM-DD>
 
-# List engagements
+# List all engagements
 seca engagement list
 
+# View engagement details as JSON
+seca engagement view --id <id>
+
+# Delete engagement and all data
+seca engagement delete --id <id>
+
 # Add scope to engagement
-seca engagement add-scope --id <id> --scope <url1>,<url2>,...
+seca engagement add-scope --id <id> <target1> <target2> ...
+
+# Interactive TUI for engagement management
+seca tui
 ```
 
 ### Check Commands
 
 ```bash
-# Run HTTP checks
-seca check http --id <engagement-id> --roe-confirm [options]
+# Run HTTP/HTTPS checks
+seca check http --id <engagement-id> --roe-confirm [options] <targets...>
 
-Options:
+# Run DNS checks
+seca check dns --id <engagement-id> --roe-confirm [options] <targets...>
+
+# Run custom plugin checks
+seca check <plugin-name> --id <engagement-id> --roe-confirm <targets...>
+
+Common Options:
   --concurrency, -c      Max concurrent requests (default: 1)
   --rate, -r             Requests per second (default: 1)
   --timeout, -t          Request timeout in seconds (default: 10)
+  --retry N              Retry failed targets N times
+  --progress             Display live progress bar
+  --telemetry            Record telemetry metrics
+  --hash sha512          Use SHA-512 instead of SHA-256
+  --secure-results       Encrypt results with GPG
   --compliance-mode      Enable compliance enforcement
   --audit-append-raw     Save raw HTTP responses (use with caution)
   --retention-days N     Retention period for raw captures
+```
+
+### Report Commands
+
+```bash
+# Generate engagement report
+seca report generate --id <id> [--format markdown|html|pdf|json]
+
+# View engagement statistics
+seca report stats --id <id> [--format table|json|csv|markdown]
+
+# Display telemetry trends
+seca report telemetry --id <id> [--format graph|json]
 ```
 
 ## Evidence & Results
@@ -664,6 +723,64 @@ make package ENGAGEMENT_ID=1762627948156627663
   --timeout 30
 ```
 
+## Plugin System
+
+SECA-CLI supports an extensible plugin architecture for custom security checkers. Plugins are external programs that integrate seamlessly with SECA-CLI's engagement management and audit features.
+
+### Plugin Location
+
+Place plugin definition files (`.json`) in:
+- **Linux/Unix:** `~/.local/share/seca-cli/plugins/`
+- **macOS:** `~/Library/Application Support/seca-cli/plugins/`
+- **Windows:** `%LOCALAPPDATA%\seca-cli\plugins\`
+
+### Plugin Definition Format
+
+Create a JSON file defining your custom checker:
+
+```json
+{
+  "name": "my-checker",
+  "description": "Custom security checker",
+  "command": "/path/to/checker-script",
+  "args": ["--verbose"],
+  "env": {
+    "CUSTOM_VAR": "value"
+  },
+  "timeout": 30,
+  "api_version": 1
+}
+```
+
+### Plugin Output Format
+
+Plugins must output JSON to stdout:
+
+```json
+{
+  "status": "success",
+  "http_status": 200,
+  "notes": "Check passed - all security headers present",
+  "error": ""
+}
+```
+
+### Using Plugins
+
+```bash
+# Plugin automatically creates new check command
+seca check my-checker --id eng123 --roe-confirm example.com
+
+# Works with all standard flags
+seca check my-checker --id eng123 --roe-confirm \
+  --concurrency 10 \
+  --progress \
+  --telemetry \
+  example.com
+```
+
+For detailed plugin development instructions, see [Plugin Development Guide](docs/developer-guide/plugin-development.md).
+
 ## Project Structure
 
 ```
@@ -733,6 +850,35 @@ VERSION=1.2.0 make build
 ```
 
 For detailed information about version management and build options, see [Version Management Guide](docs/technical/version-management.md).
+
+## Documentation
+
+Comprehensive documentation is available in the `docs/` directory:
+
+### User Guides
+- [Installation Guide](docs/user-guide/installation.md) - Complete installation instructions for all platforms
+- [Configuration Guide](docs/user-guide/configuration.md) - Configuration reference and examples
+- [Advanced Features Guide](docs/user-guide/advanced-features.md) - Retry mechanism, telemetry, GPG encryption, and more
+
+### Operator Guides
+- [Operator Training](docs/operator-guide/operator-training.md) - Training materials and certification
+- [Compliance Guide](docs/operator-guide/compliance.md) - Compliance requirements and best practices
+
+### Technical Documentation
+- [Deployment Guide](docs/technical/deployment.md) - Production deployment
+- [Testing Guide](docs/technical/testing.md) - Testing and QA procedures
+- [Version Management](docs/technical/version-management.md) - Build versioning
+
+### Developer Guides
+- [Plugin Development Guide](docs/developer-guide/plugin-development.md) - Create custom security checkers
+
+### Reference Documentation
+- [Command Reference](docs/reference/command-reference.md) - Complete command and flag reference
+- [Troubleshooting Guide](docs/reference/troubleshooting.md) - Common issues and solutions
+- [Data Migration Guide](docs/reference/data-migration.md) - Data directory migration
+- [Template Approaches](docs/reference/template-approaches.md) - Report template implementation
+
+View the [Documentation Index](docs/README.md) for organized access to all guides.
 
 ## Contributing
 

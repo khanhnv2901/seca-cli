@@ -10,6 +10,7 @@ Essential documentation for getting started and daily usage.
 
 - **[Installation Guide](user-guide/installation.md)** - Installation instructions for all platforms
 - **[Configuration Guide](user-guide/configuration.md)** - Complete configuration reference
+- **[Advanced Features Guide](user-guide/advanced-features.md)** - Retry mechanism, telemetry, GPG encryption, and more
 
 ### 👤 Operator Guides
 
@@ -26,10 +27,18 @@ In-depth technical information for developers and system administrators.
 - **[Testing Guide](technical/testing.md)** - Testing and quality assurance
 - **[Version Management Guide](technical/version-management.md)** - Build versioning and releases
 
+### 💻 Developer Guides
+
+Documentation for extending and customizing SECA-CLI.
+
+- **[Plugin Development Guide](developer-guide/plugin-development.md)** - Create custom security checkers
+
 ### 📚 Reference
 
 Additional reference materials and guides.
 
+- **[Command Reference](reference/command-reference.md)** - Complete command and flag reference
+- **[Troubleshooting Guide](reference/troubleshooting.md)** - Common issues and solutions
 - **[Data Migration Guide](reference/data-migration.md)** - Migrating data directories
 - **[Template Approaches](reference/template-approaches.md)** - Report template implementation
 
@@ -51,6 +60,10 @@ For new users, start here:
 - **Install SECA-CLI**: [Installation Guide](user-guide/installation.md#quick-install)
 - **Configure Settings**: [Configuration Guide](user-guide/configuration.md)
 - **First Engagement**: [Operator Training Guide](operator-guide/operator-training.md#hands-on-exercises)
+- **Use Advanced Features**: [Advanced Features Guide](user-guide/advanced-features.md)
+- **Create Plugins**: [Plugin Development Guide](developer-guide/plugin-development.md)
+- **Troubleshoot Issues**: [Troubleshooting Guide](reference/troubleshooting.md)
+- **Command Reference**: [Command Reference](reference/command-reference.md)
 - **Deploy to Production**: [Deployment Guide](technical/deployment.md)
 - **Run Tests**: [Testing Guide](technical/testing.md)
 - **Build Releases**: [Version Management Guide](technical/version-management.md)
@@ -74,6 +87,7 @@ For new users, start here:
 - [Deployment Guide](technical/deployment.md)
 
 #### 👨‍💻 Developers
+- [Plugin Development Guide](developer-guide/plugin-development.md)
 - [Testing Guide](technical/testing.md)
 - [Version Management Guide](technical/version-management.md)
 - [Template Approaches](reference/template-approaches.md)
@@ -82,6 +96,7 @@ For new users, start here:
 - [Installation Guide](user-guide/installation.md)
 - [Deployment Guide](technical/deployment.md)
 - [Configuration Guide](user-guide/configuration.md)
+- [Troubleshooting Guide](reference/troubleshooting.md)
 
 ---
 
@@ -93,7 +108,8 @@ docs/
 │
 ├── user-guide/
 │   ├── installation.md         Installation for all platforms
-│   └── configuration.md        Configuration reference
+│   ├── configuration.md        Configuration reference
+│   └── advanced-features.md    Advanced features and capabilities
 │
 ├── operator-guide/
 │   ├── operator-training.md    Operator training materials
@@ -104,7 +120,12 @@ docs/
 │   ├── testing.md              Testing documentation
 │   └── version-management.md   Build and release management
 │
+├── developer-guide/
+│   └── plugin-development.md   Plugin creation and API
+│
 └── reference/
+    ├── command-reference.md    Complete command and flag reference
+    ├── troubleshooting.md      Common issues and solutions
     ├── data-migration.md       Data directory migration
     └── template-approaches.md  Report template details
 ```
