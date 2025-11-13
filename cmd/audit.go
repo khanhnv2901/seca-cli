@@ -34,8 +34,8 @@ var auditHeader = []string{
 // AppendAuditRow appends a single audit row to results/<engagementID>/audit.csv
 func AppendAuditRow(resultsDir string, engagementID string, operatorName string, commandName string, target string, status string, httpStatus int, tlsExpiry string, notes string, errMsg string, durationSeconds float64) error {
 	// ensure engagement-specific directory under resultsDir
-	dir := filepath.Join(resultsDir, engagementID)
-	if err := os.MkdirAll(dir, consts.DefaultDirPerm); err != nil {
+	dir, err := ensureResultsDir(resultsDir, engagementID)
+	if err != nil {
 		return fmt.Errorf("create results subdir failed: %w", err)
 	}
 
@@ -94,8 +94,8 @@ func AppendAuditRow(resultsDir string, engagementID string, operatorName string,
 
 // SaveRawCapture writes a limited raw HTTP response for auditing (be careful with PII)
 func SaveRawCapture(resultsDir string, engamentID, target string, headers map[string][]string, bodySnippet string) error {
-	dir := filepath.Join(resultsDir, engamentID)
-	if err := os.MkdirAll(dir, consts.DefaultDirPerm); err != nil {
+	dir, err := ensureResultsDir(resultsDir, engamentID)
+	if err != nil {
 		return err
 	}
 	filename := fmt.Sprintf("raw_%d.txt", time.Now().UnixNano())

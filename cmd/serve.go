@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -102,7 +101,9 @@ var serveCmd = &cobra.Command{
 			// Attempt graceful shutdown
 			if err := httpServer.Shutdown(ctx); err != nil {
 				// Force close if graceful shutdown fails
-				httpServer.Close()
+				if closeErr := httpServer.Close(); closeErr != nil {
+					return fmt.Errorf("failed to gracefully shutdown server: %w (close error: %v)", err, closeErr)
+				}
 				return fmt.Errorf("failed to gracefully shutdown server: %w", err)
 			}
 
@@ -180,7 +181,10 @@ type resultsAPIService struct {
 }
 
 func (s *resultsAPIService) GetResults(ctx context.Context, id string) ([]byte, error) {
-	path := filepath.Join(s.appCtx.ResultsDir, id, "results.json")
+	path, err := resolveResultsPath(s.appCtx.ResultsDir, id, "results.json")
+	if err != nil {
+		return nil, err
+	}
 	return os.ReadFile(path)
 }
 
@@ -250,6 +254,9 @@ func (s *jobAPIService) StartJob(ctx context.Context, req api.JobRequest) (*api.
 	if req.EngagementID == "" {
 		return nil, fmt.Errorf("engagement_id required")
 	}
+	if err := validateEngagementID(req.EngagementID); err != nil {
+		return nil, fmt.Errorf("invalid engagement_id: %w", err)
+	}
 	if jobType != "http" {
 		return nil, fmt.Errorf("unsupported job type %s", req.Type)
 	}
@@ -317,8 +324,11 @@ func newCliCheckRunner() (*cliCheckRunner, error) {
 }
 
 func (r *cliCheckRunner) RunHTTP(ctx context.Context, engagementID string) error {
+	if err := validateEngagementID(engagementID); err != nil {
+		return err
+	}
 	args := []string{"check", "http", "--id", engagementID, "--roe-confirm", "--progress=false"}
-	cmd := exec.CommandContext(ctx, r.executable, args...)
+	cmd := exec.CommandContext(ctx, r.executable, args...) // #nosec G204 -- executable is trusted binary and args are fixed with validated engagement ID.
 
 	// Create limited buffers (1MB max each) to prevent memory exhaustion
 	// If output exceeds this, command will block until buffer space is available

@@ -7,6 +7,7 @@ import (
 	"runtime"
 
 	consts "github.com/khanhnv2901/seca-cli/internal/constants"
+	"github.com/khanhnv2901/seca-cli/internal/security"
 )
 
 // getDataDir returns the appropriate data directory for the current OS
@@ -66,7 +67,10 @@ func getEngagementsFilePath() (string, error) {
 		return "", err
 	}
 
-	newPath := filepath.Join(dataDir, "engagements.json")
+	newPath, err := security.ResolveWithin(dataDir, "engagements.json")
+	if err != nil {
+		return "", err
+	}
 
 	// Check if file exists in new location
 	if _, err := os.Stat(newPath); err == nil {
@@ -91,23 +95,32 @@ func getEngagementsFilePath() (string, error) {
 
 // migrateEngagementsFile moves engagements.json from old to new location
 func migrateEngagementsFile(oldPath, newPath string) error {
+	oldAbs, err := filepath.Abs(oldPath)
+	if err != nil {
+		return fmt.Errorf("resolve old path: %w", err)
+	}
+	newAbs, err := filepath.Abs(newPath)
+	if err != nil {
+		return fmt.Errorf("resolve new path: %w", err)
+	}
+
 	// Read old file
-	data, err := os.ReadFile(oldPath)
+	data, err := os.ReadFile(oldAbs)
 	if err != nil {
 		return fmt.Errorf("failed to read old file: %w", err)
 	}
 
 	// Write to new location
-	if err := os.WriteFile(newPath, data, consts.DefaultFilePerm); err != nil {
+	if err := os.WriteFile(newAbs, data, consts.DefaultFilePerm); err != nil {
 		return fmt.Errorf("failed to write to new location: %w", err)
 	}
 
 	// Backup old file instead of deleting
-	backupPath := oldPath + ".backup"
-	if err := os.Rename(oldPath, backupPath); err != nil {
+	backupPath := oldAbs + ".backup"
+	if err := os.Rename(oldAbs, backupPath); err != nil {
 		// If rename fails, try to delete the old file
 		// Ignore error - data is already migrated, so cleanup failure is not critical
-		_ = os.Remove(oldPath)
+		_ = os.Remove(oldAbs)
 		return nil
 	}
 
@@ -122,7 +135,10 @@ func getResultsDir() (string, error) {
 		return "", err
 	}
 
-	resultsDir := filepath.Join(dataDir, "results")
+	resultsDir, err := security.ResolveWithin(dataDir, "results")
+	if err != nil {
+		return "", err
+	}
 
 	// Create directory if it doesn't exist
 	if err := os.MkdirAll(resultsDir, consts.DefaultDirPerm); err != nil {

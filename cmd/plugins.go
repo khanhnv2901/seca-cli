@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/khanhnv2901/seca-cli/internal/checker"
+	"github.com/khanhnv2901/seca-cli/internal/security"
 	"github.com/spf13/cobra"
 )
 
@@ -59,7 +60,11 @@ func loadCheckerPlugins() ([]checkerPluginDefinition, error) {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
 			continue
 		}
-		path := filepath.Join(pluginsDir, entry.Name())
+		path, err := security.ResolveWithin(pluginsDir, entry.Name())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: invalid plugin path %s: %v\n", entry.Name(), err)
+			continue
+		}
 		data, err := os.ReadFile(path)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to read plugin %s: %v\n", entry.Name(), err)

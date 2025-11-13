@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/khanhnv2901/seca-cli/internal/checker"
@@ -55,12 +54,14 @@ func recordTelemetry(appCtx *AppContext, engagementID string, command string, re
 		return fmt.Errorf("marshal telemetry: %w", err)
 	}
 
-	dir := filepath.Join(appCtx.ResultsDir, engagementID)
-	if err := os.MkdirAll(dir, consts.DefaultDirPerm); err != nil {
+	if _, err := ensureResultsDir(appCtx.ResultsDir, engagementID); err != nil {
 		return fmt.Errorf("prepare telemetry directory: %w", err)
 	}
 
-	telemetryPath := filepath.Join(dir, "telemetry.jsonl")
+	telemetryPath, err := resolveResultsPath(appCtx.ResultsDir, engagementID, "telemetry.jsonl")
+	if err != nil {
+		return fmt.Errorf("determine telemetry path: %w", err)
+	}
 	f, err := os.OpenFile(telemetryPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, consts.DefaultFilePerm)
 	if err != nil {
 		return fmt.Errorf("open telemetry file: %w", err)
@@ -90,7 +91,10 @@ func loadTelemetryHistory(resultsDir, engagementID string, limit int) ([]Telemet
 		limit = 5
 	}
 
-	telemetryPath := filepath.Join(resultsDir, engagementID, "telemetry.jsonl")
+	telemetryPath, err := resolveResultsPath(resultsDir, engagementID, "telemetry.jsonl")
+	if err != nil {
+		return nil, fmt.Errorf("invalid telemetry path: %w", err)
+	}
 	f, err := os.Open(telemetryPath)
 	if os.IsNotExist(err) {
 		return nil, nil

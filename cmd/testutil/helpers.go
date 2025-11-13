@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	consts "github.com/khanhnv2901/seca-cli/internal/constants"
+	"github.com/khanhnv2901/seca-cli/internal/security"
 	"go.uber.org/zap"
 )
 
@@ -112,7 +113,7 @@ func (e *TestEnv) ResultsPath() string {
 func (e *TestEnv) CreateFile(relativePath string, content []byte) string {
 	e.t.Helper()
 
-	fullPath := filepath.Join(e.TmpDir, relativePath)
+	fullPath := resolveTmpPath(e.TmpDir, relativePath, e.t)
 	dir := filepath.Dir(fullPath)
 
 	if err := os.MkdirAll(dir, consts.DefaultDirPerm); err != nil {
@@ -131,7 +132,7 @@ func (e *TestEnv) CreateFile(relativePath string, content []byte) string {
 func (e *TestEnv) ReadFile(relativePath string) []byte {
 	e.t.Helper()
 
-	fullPath := filepath.Join(e.TmpDir, relativePath)
+	fullPath := resolveTmpPath(e.TmpDir, relativePath, e.t)
 	content, err := os.ReadFile(fullPath)
 	if err != nil {
 		e.t.Fatalf("Failed to read file %s: %v", fullPath, err)
@@ -142,7 +143,7 @@ func (e *TestEnv) ReadFile(relativePath string) []byte {
 
 // FileExists checks if a file exists in the test environment.
 func (e *TestEnv) FileExists(relativePath string) bool {
-	fullPath := filepath.Join(e.TmpDir, relativePath)
+	fullPath := resolveTmpPath(e.TmpDir, relativePath, e.t)
 	_, err := os.Stat(fullPath)
 	return err == nil
 }
@@ -163,6 +164,15 @@ func (e *TestEnv) MustExist(relativePath string) {
 	}
 }
 
+func resolveTmpPath(baseDir, relativePath string, t *testing.T) string {
+	t.Helper()
+	path, err := security.ResolveWithin(baseDir, relativePath)
+	if err != nil {
+		t.Fatalf("invalid test path %s: %v", relativePath, err)
+	}
+	return path
+}
+
 // SetupEngagementsFile creates a test engagements file with the given content.
 // Returns a cleanup function that should be deferred.
 func SetupEngagementsFile(t *testing.T, getFilePath func() (string, error)) func() {
@@ -176,23 +186,29 @@ func SetupEngagementsFile(t *testing.T, getFilePath func() (string, error)) func
 	// Backup existing file if it exists
 	backupFile := filePath + ".test.backup"
 	if _, err := os.Stat(filePath); err == nil {
-		data, _ := os.ReadFile(filePath)
+		data, _ := os.ReadFile(filePath) // #nosec G304 -- engagements path resolved via getEngagementsFilePath within the controlled test dir.
 		_ = os.WriteFile(backupFile, data, consts.DefaultFilePerm)
 	}
 
 	// Remove existing file
-	os.Remove(filePath)
+	if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
+		t.Fatalf("failed to remove %s: %v", filePath, err)
+	}
 
 	// Return cleanup function
 	return func() {
 		// Restore backup if it existed
 		if _, err := os.Stat(backupFile); err == nil {
-			data, _ := os.ReadFile(backupFile)
+			data, _ := os.ReadFile(backupFile) // #nosec G304 -- backup file created in the same directory as the trusted engagements file.
 			_ = os.WriteFile(filePath, data, consts.DefaultFilePerm)
-			_ = os.Remove(backupFile)
+			if err := os.Remove(backupFile); err != nil && !os.IsNotExist(err) {
+				t.Fatalf("failed to remove %s: %v", backupFile, err)
+			}
 		} else {
 			// Just remove test file
-			_ = os.Remove(filePath)
+			if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
+				t.Fatalf("failed to clean up %s: %v", filePath, err)
+			}
 		}
 	}
 }

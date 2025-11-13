@@ -259,8 +259,7 @@ func runCheckCommand(cmd *cobra.Command, config checkConfig) error {
 	}
 
 	startAll := time.Now()
-	dir := filepath.Join(appCtx.ResultsDir, params.ID)
-	if err := os.MkdirAll(dir, consts.DefaultDirPerm); err != nil {
+	if _, err := ensureResultsDir(appCtx.ResultsDir, params.ID); err != nil {
 		return fmt.Errorf("failed to create results directory: %w", err)
 	}
 
@@ -440,6 +439,9 @@ func validateCheckParams(params checkParams, appCtx *AppContext, auditAppendRaw 
 	if params.ID == "" {
 		return fmt.Errorf("--id is required")
 	}
+	if err := validateEngagementID(params.ID); err != nil {
+		return err
+	}
 
 	if !params.ROEConfirm {
 		return fmt.Errorf("this action requires --roe-confirm to proceed (ensures explicit written authorization)")
@@ -483,13 +485,15 @@ func loadEngagementByID(id string) (*Engagement, error) {
 
 // writeResultsAndHash writes results to JSON file, computes hashes, and returns paths and hashes
 func writeResultsAndHash(appCtx *AppContext, id string, resultsFilename string, metadata RunMetadata, results []checker.CheckResult, startTime time.Time, hashAlgo HashAlgorithm) (resultsPath, auditPath, auditHash, resultsHash string, err error) {
-	dir := filepath.Join(appCtx.ResultsDir, id)
-	if err := os.MkdirAll(dir, consts.DefaultDirPerm); err != nil {
+	if _, err := ensureResultsDir(appCtx.ResultsDir, id); err != nil {
 		return "", "", "", "", fmt.Errorf("failed to create results directory: %w", err)
 	}
 
 	// Write results JSON (first pass without audit hash)
-	resultsPath = filepath.Join(dir, resultsFilename)
+	resultsPath, err = resolveResultsPath(appCtx.ResultsDir, id, resultsFilename)
+	if err != nil {
+		return "", "", "", "", fmt.Errorf("resolve results path: %w", err)
+	}
 	out := RunOutput{
 		Metadata: metadata,
 		Results:  results,
@@ -509,7 +513,10 @@ func writeResultsAndHash(appCtx *AppContext, id string, resultsFilename string, 
 	}
 
 	// Compute hash for audit.csv
-	auditPath = filepath.Join(dir, "audit.csv")
+	auditPath, err = resolveResultsPath(appCtx.ResultsDir, id, "audit.csv")
+	if err != nil {
+		return "", "", "", "", fmt.Errorf("resolve audit path: %w", err)
+	}
 	if err := ensureAuditFile(auditPath); err != nil {
 		return "", "", "", "", fmt.Errorf("failed to initialize audit file: %w", err)
 	}
@@ -552,9 +559,13 @@ func signHashFiles(auditPath, resultsPath string, hashAlgo HashAlgorithm, gpgKey
 		return fmt.Errorf("--gpg-key required with --auto-sign")
 	}
 
+	if err := validateGPGKey(gpgKey); err != nil {
+		return fmt.Errorf("invalid gpg key: %w", err)
+	}
+
 	extension := hashAlgo.FileExtension()
 	signFile := func(path string) error {
-		cmd := exec.Command("gpg", "--armor", "--local-user", gpgKey, "--sign", path)
+		cmd := exec.Command("gpg", "--armor", "--local-user", gpgKey, "--sign", path) // #nosec G204 -- arguments are validated and passed directly without shell expansion.
 		cmd.Dir = filepath.Dir(path)
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 		return cmd.Run()
@@ -576,7 +587,10 @@ func getGPGFingerprint(gpgKey string) (string, error) {
 	if gpgKey == "" {
 		return "", errors.New("--gpg-key required to determine fingerprint")
 	}
-	cmd := exec.Command("gpg", "--with-colons", "--list-keys", gpgKey)
+	if err := validateGPGKey(gpgKey); err != nil {
+		return "", fmt.Errorf("invalid gpg key: %w", err)
+	}
+	cmd := exec.Command("gpg", "--with-colons", "--list-keys", gpgKey) // #nosec G204 -- controlled arguments, no shell expansion.
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
@@ -599,8 +613,11 @@ func encryptAuditLog(auditPath, gpgKey string) (string, error) {
 	if gpgKey == "" {
 		return "", errors.New("--gpg-key required for secure results")
 	}
+	if err := validateGPGKey(gpgKey); err != nil {
+		return "", fmt.Errorf("invalid gpg key: %w", err)
+	}
 	encryptedPath := auditPath + ".gpg"
-	cmd := exec.Command("gpg", "--yes", "--recipient", gpgKey, "--output", encryptedPath, "--encrypt", auditPath)
+	cmd := exec.Command("gpg", "--yes", "--recipient", gpgKey, "--output", encryptedPath, "--encrypt", auditPath) // #nosec G204 -- key validated and passed as argv, not via shell.
 	cmd.Dir = filepath.Dir(auditPath)
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {

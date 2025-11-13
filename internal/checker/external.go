@@ -62,7 +62,7 @@ func (e *ExternalChecker) Check(ctx context.Context, target string) CheckResult 
 	args := append([]string{}, e.args...)
 	args = append(args, target)
 
-	cmd := exec.CommandContext(checkCtx, e.command, args...)
+	cmd := exec.CommandContext(checkCtx, e.command, args...) // #nosec G204 -- external checker commands are supplied by operator configuration and executed without a shell.
 	cmd.Env = os.Environ()
 	if len(e.env) > 0 {
 		for k, v := range e.env {

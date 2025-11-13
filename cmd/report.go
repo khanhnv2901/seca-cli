@@ -8,7 +8,6 @@ import (
 	"html/template"
 	"math"
 	"os"
-	"path/filepath"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -94,7 +93,10 @@ var reportGenerateCmd = &cobra.Command{
 		}
 
 		// Read results from results directory
-		path := filepath.Join(appCtx.ResultsDir, id, "results.json")
+		path, err := resolveResultsPath(appCtx.ResultsDir, id, "results.json")
+		if err != nil {
+			return fmt.Errorf("resolve results path: %w", err)
+		}
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			return fmt.Errorf("no results found at %s", path)
 		}
@@ -139,7 +141,10 @@ var reportGenerateCmd = &cobra.Command{
 				return fmt.Errorf("failed to generate PDF report: %w", perr)
 			}
 			filename = "report.pdf"
-			reportPath := filepath.Join(appCtx.ResultsDir, id, filename)
+			reportPath, err := resolveResultsPath(appCtx.ResultsDir, id, filename)
+			if err != nil {
+				return fmt.Errorf("resolve report path: %w", err)
+			}
 			if err := os.WriteFile(reportPath, pdfBytes, consts.DefaultFilePerm); err != nil {
 				return fmt.Errorf("failed to write report: %w", err)
 			}
@@ -154,7 +159,10 @@ var reportGenerateCmd = &cobra.Command{
 		}
 
 		// Write report to file
-		reportPath := filepath.Join(appCtx.ResultsDir, id, filename)
+		reportPath, err := resolveResultsPath(appCtx.ResultsDir, id, filename)
+		if err != nil {
+			return fmt.Errorf("resolve report path: %w", err)
+		}
 		if err := os.WriteFile(reportPath, []byte(reportContent), consts.DefaultFilePerm); err != nil {
 			return fmt.Errorf("failed to write report: %w", err)
 		}
@@ -535,7 +543,9 @@ func printStatsTable(summary reportStatsSummary) {
 		}
 		fmt.Fprintf(tw, "%s\t%s\t%d\t%s\t%s\n", entry.Target, status, entry.HTTPStatus, tlsCol, notes)
 	}
-	tw.Flush()
+	if err := tw.Flush(); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to flush stats table: %v\n", err)
+	}
 }
 
 func printTelemetryASCII(records []TelemetryRecord) {
@@ -577,7 +587,10 @@ var reportStatsCmd = &cobra.Command{
 			format = "text"
 		}
 
-		path := filepath.Join(appCtx.ResultsDir, id, "results.json")
+		path, err := resolveResultsPath(appCtx.ResultsDir, id, "results.json")
+		if err != nil {
+			return fmt.Errorf("resolve results path: %w", err)
+		}
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return err

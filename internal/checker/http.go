@@ -44,7 +44,10 @@ func (h *HTTPChecker) Check(ctx context.Context, target string) (result CheckRes
 	client := &http.Client{
 		Timeout: h.Timeout,
 		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: false},
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: false,
+				MinVersion:         tls.VersionTLS12,
+			},
 		},
 	}
 
