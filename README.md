@@ -282,6 +282,9 @@ Crawling Options:
 # Generate engagement report
 seca report generate --id <id> [--format markdown|html|pdf|json]
 
+# Generate detailed vulnerability report with CVSS scores
+seca report vulnerability --id <id>
+
 # View engagement statistics
 seca report stats --id <id> [--format table|json|csv|markdown]
 
@@ -667,6 +670,54 @@ SECA-CLI is designed to support compliance with:
 - **ISO 27001** - Documentation, access controls, change tracking
 
 See [Compliance Guide](docs/operator-guide/compliance.md) for detailed compliance guidance.
+
+## Vulnerability Reporting
+
+SECA-CLI generates detailed vulnerability reports that analyze security findings and present them in an easy-to-understand format with:
+
+- **Security Findings by Severity** - Critical, High, Medium, Low categorization
+- **Detailed Descriptions** - Comprehensive explanations of each vulnerability
+- **CVSS Scores** - Industry-standard vulnerability scoring (CVSS 3.1)
+- **Remediation Steps** - Step-by-step instructions to fix issues
+- **Code Examples** - Implementation examples for security headers and configurations
+- **Testing Strategies** - Guidelines for testing security implementations
+- **Affected URLs** - Complete list of pages where issues were detected
+
+### Generating Vulnerability Reports
+
+```bash
+# Run security scan with crawling
+./seca-cli check http --id <engagement-id> --roe-confirm --crawl
+
+# Generate detailed vulnerability report
+./seca-cli report vulnerability --id <engagement-id>
+
+# Report is saved as HTML:
+# ~/.local/share/seca-cli/results/<engagement-id>/vulnerability_report.html
+```
+
+### Report Features
+
+The vulnerability report includes:
+
+1. **Scan Summary** - Date, duration, URLs scanned, vulnerability counts
+2. **Security Findings Table** - Interactive table with all findings
+3. **Expandable Details** - Click any finding to see full details
+4. **CVSS Scoring** - Base score, severity, and attack vector
+5. **Platform-Specific Fixes** - Implementation examples for Apache, Nginx, Express.js, etc.
+6. **Compliance References** - OWASP, PCI DSS, and NIST guidelines
+
+### Example Findings
+
+Common vulnerabilities detected:
+- Missing Content Security Policy (CSP)
+- Missing HTTP Strict Transport Security (HSTS)
+- Missing X-Frame-Options header
+- Insecure cookie configurations
+- Overly permissive CORS policies
+- Weak TLS/SSL configurations
+
+Each finding includes detailed remediation steps with code examples.
 
 ## Examples
 

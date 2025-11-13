@@ -12,6 +12,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/jung-kurt/gofpdf"
 	"github.com/khanhnv2901/seca-cli/internal/checker"
 	consts "github.com/khanhnv2901/seca-cli/internal/constants"
 	"github.com/spf13/cobra"
@@ -23,7 +24,7 @@ const (
 	statsTLSSoonWindow   = 30 * 24 * time.Hour
 )
 
-//go:embed templates/report.html templates/report.md
+//go:embed templates/report.html templates/report.md templates/vulnerability_report.html
 var reportTemplateFS embed.FS
 
 var securityHeaderNames = []string{
@@ -45,6 +46,7 @@ var (
 		"formatTime":          formatShortTimestamp,
 		"formatDuration":      formatDurationLabel,
 		"formatSuccess":       formatSuccessRate,
+		"lower":               strings.ToLower,
 	}
 
 	markdownTemplateFuncs = template.FuncMap{
@@ -59,11 +61,18 @@ var (
 		"formatSuccess":          formatSuccessRate,
 	}
 
+	vulnTemplateFuncs = template.FuncMap{
+		"lower": strings.ToLower,
+	}
+
 	htmlReportTemplate = template.Must(
 		template.New("report.html").Funcs(htmlTemplateFuncs).ParseFS(reportTemplateFS, htmlTemplatePath),
 	)
 	markdownReportTemplate = template.Must(
 		template.New("report.md").Funcs(markdownTemplateFuncs).ParseFS(reportTemplateFS, markdownTemplatePath),
+	)
+	vulnReportTemplate = template.Must(
+		template.New("vulnerability_report.html").Funcs(vulnTemplateFuncs).ParseFS(reportTemplateFS, "templates/vulnerability_report.html"),
 	)
 )
 
@@ -323,95 +332,167 @@ func formatSuccessRate(rate float64) string {
 }
 
 func generatePDFReportBytes(data TemplateData) ([]byte, error) {
-	lines := buildPDFLines(data)
-	var contentBuilder strings.Builder
-	contentBuilder.WriteString("BT\n/F1 12 Tf\n72 750 Td\n")
-	firstLine := true
-	for _, line := range lines {
-		escaped := pdfEscape(line)
-		if firstLine {
-			contentBuilder.WriteString(fmt.Sprintf("(%s) Tj\n", escaped))
-			firstLine = false
-			continue
-		}
-		contentBuilder.WriteString("T*\n")
-		contentBuilder.WriteString(fmt.Sprintf("(%s) Tj\n", escaped))
-	}
-	contentBuilder.WriteString("ET\n")
-	content := contentBuilder.String()
-	contentLen := len(content)
+	pdf := gofpdf.New("P", "mm", "A4", "")
+	pdf.AddPage()
 
-	var buf bytes.Buffer
-	buf.WriteString("%PDF-1.4\n")
+	// Title
+	pdf.SetFont("Arial", "B", 16)
+	pdf.CellFormat(0, 10, fmt.Sprintf("Engagement Report: %s", data.Metadata.EngagementName), "", 1, "C", false, 0, "")
+	pdf.Ln(5)
 
-	offsets := make([]int, 6)
-	writeObj := func(idx int, obj string) {
-		offsets[idx] = buf.Len()
-		buf.WriteString(obj)
-		if !strings.HasSuffix(obj, "\n") {
-			buf.WriteString("\n")
-		}
-	}
+	// Metadata section
+	pdf.SetFont("Arial", "", 10)
+	pdf.CellFormat(0, 6, fmt.Sprintf("Engagement ID: %s", data.Metadata.EngagementID), "", 1, "", false, 0, "")
+	pdf.CellFormat(0, 6, fmt.Sprintf("Operator: %s", data.Metadata.Operator), "", 1, "", false, 0, "")
+	pdf.CellFormat(0, 6, fmt.Sprintf("Started: %s", data.StartedAt), "", 1, "", false, 0, "")
+	pdf.CellFormat(0, 6, fmt.Sprintf("Completed: %s", data.CompletedAt), "", 1, "", false, 0, "")
+	pdf.Ln(5)
 
-	writeObj(1, "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj")
-	writeObj(2, "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj")
-	writeObj(3, "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj")
-	writeObj(4, fmt.Sprintf("4 0 obj << /Length %d >> stream\n%sendstream\nendobj", contentLen, content))
-	writeObj(5, "5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj")
+	// Summary section
+	pdf.SetFont("Arial", "B", 12)
+	pdf.CellFormat(0, 8, "Summary", "", 1, "", false, 0, "")
+	pdf.SetFont("Arial", "", 10)
+	pdf.CellFormat(0, 6, fmt.Sprintf("Success: %d | Errors: %d | Success Rate: %s",
+		data.SuccessCount, data.ErrorCount, data.SuccessRate), "", 1, "", false, 0, "")
+	pdf.Ln(5)
 
-	xrefStart := buf.Len()
-	buf.WriteString("xref\n0 6\n0000000000 65535 f \n")
-	for i := 1; i <= 5; i++ {
-		buf.WriteString(fmt.Sprintf("%010d 00000 n \n", offsets[i]))
-	}
-	buf.WriteString("trailer << /Size 6 /Root 1 0 R >>\n")
-	buf.WriteString(fmt.Sprintf("startxref\n%d\n%%%%EOF\n", xrefStart))
-
-	return buf.Bytes(), nil
-}
-
-func buildPDFLines(data TemplateData) []string {
-	lines := []string{
-		fmt.Sprintf("Engagement Report: %s", data.Metadata.EngagementName),
-		fmt.Sprintf("Engagement ID: %s", data.Metadata.EngagementID),
-		fmt.Sprintf("Operator: %s", data.Metadata.Operator),
-		fmt.Sprintf("Started: %s", data.StartedAt),
-		fmt.Sprintf("Completed: %s", data.CompletedAt),
-		"",
-		fmt.Sprintf("Summary: %d OK / %d Errors (Success %s)", data.SuccessCount, data.ErrorCount, data.SuccessRate),
-	}
-
+	// Trend Analysis section (if available)
 	if len(data.TrendHistory) > 0 {
-		lines = append(lines, "", "Trend Analysis:")
-		lines = append(lines, fmt.Sprintf("Average Success: %.1f%%", data.TrendSummary.AverageSuccess))
-		lines = append(lines, fmt.Sprintf("Average Duration: %s", formatDurationLabel(data.TrendSummary.AverageDuration)))
+		pdf.SetFont("Arial", "B", 12)
+		pdf.CellFormat(0, 8, "Trend Analysis", "", 1, "", false, 0, "")
+		pdf.SetFont("Arial", "", 10)
+		pdf.CellFormat(0, 6, fmt.Sprintf("Average Success: %.1f%%", data.TrendSummary.AverageSuccess), "", 1, "", false, 0, "")
+		pdf.CellFormat(0, 6, fmt.Sprintf("Average Duration: %s", formatDurationLabel(data.TrendSummary.AverageDuration)), "", 1, "", false, 0, "")
+		pdf.Ln(3)
+
 		for _, rec := range data.TrendHistory {
-			lines = append(lines, fmt.Sprintf("%s -> %s success, %s", formatShortTimestamp(rec.Timestamp), formatSuccessRate(rec.SuccessRate), formatDurationLabel(rec.DurationSeconds)))
+			pdf.CellFormat(0, 6, fmt.Sprintf("  %s -> %s success, %s",
+				formatShortTimestamp(rec.Timestamp),
+				formatSuccessRate(rec.SuccessRate),
+				formatDurationLabel(rec.DurationSeconds)), "", 1, "", false, 0, "")
 		}
+		pdf.Ln(5)
 	}
 
-	lines = append(lines, "", "Results:")
-	maxResults := 25
+	// Results section - Detailed Security Analysis
+	pdf.SetFont("Arial", "B", 12)
+	pdf.CellFormat(0, 8, "Detailed Security Analysis", "", 1, "", false, 0, "")
+	pdf.Ln(2)
+
+	maxResults := 50
 	for i, r := range data.Results {
 		if i == maxResults {
-			lines = append(lines, fmt.Sprintf("... %d additional targets omitted ...", len(data.Results)-maxResults))
+			pdf.SetFont("Arial", "I", 9)
+			pdf.CellFormat(0, 6, fmt.Sprintf("... %d additional targets omitted ...", len(data.Results)-maxResults), "", 1, "", false, 0, "")
 			break
 		}
-		notes := strings.TrimSpace(r.Notes)
-		if notes == "" {
-			notes = "No notes"
+
+		// Check if we need a new page before adding content
+		if pdf.GetY() > 250 {
+			pdf.AddPage()
 		}
-		lines = append(lines, fmt.Sprintf("%s - %s (%s)", r.Target, strings.ToUpper(r.Status), notes))
+
+		status := strings.ToUpper(r.Status)
+
+		// Target header with status
+		pdf.SetFont("Arial", "B", 11)
+		pdf.SetFillColor(240, 240, 240)
+		pdf.CellFormat(0, 7, fmt.Sprintf("%s - %s", r.Target, status), "", 1, "", true, 0, "")
+		pdf.Ln(1)
+
+		// Basic information
+		pdf.SetFont("Arial", "", 9)
+		pdf.CellFormat(0, 5, fmt.Sprintf("Response Time: %.2f ms | Server: %s", r.ResponseTime, r.ServerHeader), "", 1, "", false, 0, "")
+
+		// Security Headers Score
+		if r.SecurityHeaders.MaxScore > 0 {
+			pdf.SetFont("Arial", "B", 9)
+			pdf.CellFormat(0, 5, fmt.Sprintf("Security Headers: %d/%d (Grade: %s)",
+				r.SecurityHeaders.Score, r.SecurityHeaders.MaxScore, r.SecurityHeaders.Grade), "", 1, "", false, 0, "")
+
+			// Missing headers
+			if len(r.SecurityHeaders.Missing) > 0 {
+				pdf.SetFont("Arial", "", 8)
+				pdf.CellFormat(0, 4, fmt.Sprintf("  Missing: %s", strings.Join(r.SecurityHeaders.Missing, ", ")), "", 1, "", false, 0, "")
+			}
+
+			// Warnings
+			if len(r.SecurityHeaders.Warnings) > 0 {
+				for _, warning := range r.SecurityHeaders.Warnings {
+					pdf.SetFont("Arial", "I", 8)
+					pdf.MultiCell(0, 4, fmt.Sprintf("  Warning: %s", warning), "", "", false)
+				}
+			}
+		}
+
+		// TLS/SSL Information
+		if r.TLSCompliance.TLSVersion != "" {
+			pdf.SetFont("Arial", "B", 9)
+			compliance := "Non-Compliant"
+			if r.TLSCompliance.Compliant {
+				compliance = "Compliant"
+			}
+			pdf.CellFormat(0, 5, fmt.Sprintf("TLS: %s | Cipher: %s | %s",
+				r.TLSCompliance.TLSVersion, r.TLSCompliance.CipherSuite, compliance), "", 1, "", false, 0, "")
+
+			// Certificate info
+			if r.TLSCompliance.CertificateInfo.Subject != "" {
+				pdf.SetFont("Arial", "", 8)
+				pdf.CellFormat(0, 4, fmt.Sprintf("  Certificate: %s (Expires: %d days)",
+					r.TLSCompliance.CertificateInfo.Subject,
+					r.TLSCompliance.CertificateInfo.DaysUntilExpiry), "", 1, "", false, 0, "")
+			}
+
+			// TLS Recommendations
+			if len(r.TLSCompliance.Recommendations) > 0 {
+				pdf.SetFont("Arial", "I", 8)
+				for _, rec := range r.TLSCompliance.Recommendations {
+					if pdf.GetY() > 270 {
+						pdf.AddPage()
+					}
+					pdf.MultiCell(0, 4, fmt.Sprintf("  - %s", rec), "", "", false)
+				}
+			}
+		}
+
+		// CORS Issues
+		if r.CORSInsights != nil && len(r.CORSInsights.Issues) > 0 {
+			pdf.SetFont("Arial", "B", 9)
+			pdf.CellFormat(0, 5, "CORS Issues:", "", 1, "", false, 0, "")
+			pdf.SetFont("Arial", "", 8)
+			for _, issue := range r.CORSInsights.Issues {
+				pdf.MultiCell(0, 4, fmt.Sprintf("  - %s", issue), "", "", false)
+			}
+		}
+
+		// Cache Policy Issues
+		if r.CachePolicy != nil && len(r.CachePolicy.Issues) > 0 {
+			pdf.SetFont("Arial", "B", 9)
+			pdf.CellFormat(0, 5, "Cache Policy Issues:", "", 1, "", false, 0, "")
+			pdf.SetFont("Arial", "", 8)
+			for _, issue := range r.CachePolicy.Issues {
+				pdf.MultiCell(0, 4, fmt.Sprintf("  - %s", issue), "", "", false)
+			}
+		}
+
+		// Notes
+		notes := strings.TrimSpace(r.Notes)
+		if notes != "" {
+			pdf.SetFont("Arial", "I", 8)
+			pdf.MultiCell(0, 4, fmt.Sprintf("Notes: %s", notes), "", "", false)
+		}
+
+		pdf.Ln(3) // Gap between targets
 	}
 
-	return lines
-}
+	// Generate PDF bytes
+	var buf bytes.Buffer
+	err := pdf.Output(&buf)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate PDF: %w", err)
+	}
 
-func pdfEscape(line string) string {
-	line = strings.ReplaceAll(line, "\\", "\\\\")
-	line = strings.ReplaceAll(line, "(", "\\(")
-	line = strings.ReplaceAll(line, ")", "\\)")
-	return line
+	return buf.Bytes(), nil
 }
 
 func buildTemplateData(output *RunOutput, successRateFmt string, trends []TelemetryRecord) TemplateData {
@@ -661,6 +742,75 @@ var reportTelemetryCmd = &cobra.Command{
 	},
 }
 
+var reportVulnCmd = &cobra.Command{
+	Use:   "vulnerability",
+	Short: "Generate detailed vulnerability report with security findings",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		appCtx := getAppContext(cmd)
+
+		id, _ := cmd.Flags().GetString("id")
+		if id == "" {
+			return fmt.Errorf("--id is required")
+		}
+
+		// Read results
+		path, err := resolveResultsPath(appCtx.ResultsDir, id, "results.json")
+		if err != nil {
+			return fmt.Errorf("resolve results path: %w", err)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		var output RunOutput
+		if err := json.Unmarshal(data, &output); err != nil {
+			return err
+		}
+
+		// Build vulnerability report
+		scanURL := output.Metadata.EngagementName
+		if len(output.Results) > 0 {
+			scanURL = output.Results[0].Target
+		}
+
+		startTime := output.Metadata.StartAt.Format("2006-01-02 15:04")
+		duration := output.Metadata.CompleteAt.Sub(output.Metadata.StartAt)
+
+		vulnReport := checker.BuildVulnerabilityReport(
+			output.Results,
+			scanURL,
+			startTime,
+			formatDurationLabel(duration.Seconds()),
+		)
+
+		// Generate HTML report
+		var buf strings.Builder
+		if err := vulnReportTemplate.Execute(&buf, vulnReport); err != nil {
+			return fmt.Errorf("failed to generate vulnerability report: %w", err)
+		}
+
+		// Write report
+		reportPath, err := resolveResultsPath(appCtx.ResultsDir, id, "vulnerability_report.html")
+		if err != nil {
+			return fmt.Errorf("resolve report path: %w", err)
+		}
+
+		if err := os.WriteFile(reportPath, []byte(buf.String()), consts.DefaultFilePerm); err != nil {
+			return fmt.Errorf("failed to write report: %w", err)
+		}
+
+		fmt.Printf("Vulnerability report generated: %s\n", reportPath)
+		fmt.Printf("Total findings: %d\n", vulnReport.Summary.Total)
+		fmt.Printf("  Critical: %d\n", vulnReport.Summary.Critical)
+		fmt.Printf("  High: %d\n", vulnReport.Summary.High)
+		fmt.Printf("  Medium: %d\n", vulnReport.Summary.Medium)
+		fmt.Printf("  Low: %d\n", vulnReport.Summary.Low)
+
+		return nil
+	},
+}
+
 func init() {
 	reportGenerateCmd.Flags().String("id", "", "Engagement ID")
 	reportGenerateCmd.Flags().String("format", "md", "Output format: json|md|html|pdf")
@@ -669,7 +819,9 @@ func init() {
 	reportTelemetryCmd.Flags().String("id", "", "Engagement ID")
 	reportTelemetryCmd.Flags().String("format", "ascii", "Output format: ascii|json")
 	reportTelemetryCmd.Flags().Int("limit", 10, "Number of recent runs to display")
+	reportVulnCmd.Flags().String("id", "", "Engagement ID")
 	reportCmd.AddCommand(reportGenerateCmd)
 	reportCmd.AddCommand(reportStatsCmd)
 	reportCmd.AddCommand(reportTelemetryCmd)
+	reportCmd.AddCommand(reportVulnCmd)
 }
