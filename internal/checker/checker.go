@@ -24,6 +24,7 @@ type CheckResult struct {
 	CORSInsights      *CORSReport             `json:"cors,omitempty"`
 	CachePolicy       *CachePolicy            `json:"cache_policy,omitempty"`
 	NetworkSecurity   *NetworkSecurityResult  `json:"network_security,omitempty"`
+	ClientSecurity    *ClientSecurityResult   `json:"client_security,omitempty"`
 	ThirdPartyScripts []string                `json:"third_party_scripts,omitempty"`
 	Notes             string                  `json:"notes,omitempty"`
 	Error             string                  `json:"error,omitempty"`
@@ -76,6 +77,38 @@ type MixedContentCheck struct {
 	InsecureIframes    int      `json:"insecure_iframes"`
 	Severity           string   `json:"severity"`            // "critical", "high", "medium"
 	Recommendation     string   `json:"recommendation,omitempty"`
+}
+
+// ClientSecurityResult contains client-side security analysis
+type ClientSecurityResult struct {
+	VulnerableLibraries []VulnerableLibrary `json:"vulnerable_libraries,omitempty"`
+	CSRFProtection      *CSRFCheck          `json:"csrf_protection,omitempty"`
+	TrustedTypes        bool                `json:"trusted_types"`
+	Issues              []string            `json:"issues,omitempty"`
+	Recommendations     []string            `json:"recommendations,omitempty"`
+}
+
+// VulnerableLibrary represents a detected vulnerable JavaScript library
+type VulnerableLibrary struct {
+	Name             string   `json:"name"`
+	DetectedVersion  string   `json:"detected_version"`
+	VulnerabilityIDs []string `json:"vulnerability_ids,omitempty"`
+	Severity         string   `json:"severity"` // "critical", "high", "medium", "low"
+	Description      string   `json:"description"`
+	Recommendation   string   `json:"recommendation"`
+	CVSS             float64  `json:"cvss,omitempty"`
+}
+
+// CSRFCheck analyzes CSRF protection mechanisms
+type CSRFCheck struct {
+	HasCSRFToken     bool     `json:"has_csrf_token"`
+	TokenLocations   []string `json:"token_locations,omitempty"` // "meta", "form", "header"
+	TokenNames       []string `json:"token_names,omitempty"`
+	DoubleCookieUsed bool     `json:"double_cookie_used"`
+	SameSiteCookies  bool     `json:"same_site_cookies"`
+	Protection       string   `json:"protection"` // "strong", "moderate", "weak", "none"
+	Issues           []string `json:"issues,omitempty"`
+	Recommendation   string   `json:"recommendation,omitempty"`
 }
 
 // CookieFinding captures insecure cookie configurations (OWASP ASVS §3.4).

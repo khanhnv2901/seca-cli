@@ -209,6 +209,32 @@ func (h *HTTPChecker) Check(ctx context.Context, target string) (result CheckRes
 					}
 				}
 			}
+
+			// Analyze client-side security (vulnerable JS libraries, CSRF, Trusted Types)
+			clientSecurity := AnalyzeClientSecurity(string(bodySnippet), resp.Header, resp.Cookies())
+			if clientSecurity != nil {
+				result.ClientSecurity = clientSecurity
+
+				// Add notes for critical findings
+				if len(clientSecurity.VulnerableLibraries) > 0 {
+					criticalCount := 0
+					for _, lib := range clientSecurity.VulnerableLibraries {
+						if lib.Severity == "critical" {
+							criticalCount++
+						}
+					}
+					if criticalCount > 0 {
+						appendNote(&result, fmt.Sprintf("%d critical vulnerable JS librar(y/ies) detected", criticalCount))
+					} else {
+						appendNote(&result, fmt.Sprintf("%d vulnerable JS librar(y/ies) detected", len(clientSecurity.VulnerableLibraries)))
+					}
+				}
+
+				// Add note for CSRF issues
+				if clientSecurity.CSRFProtection != nil && !clientSecurity.CSRFProtection.HasCSRFToken {
+					appendNote(&result, "No CSRF protection detected")
+				}
+			}
 		}
 	}
 

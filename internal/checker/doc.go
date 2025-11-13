@@ -34,5 +34,20 @@
 //   - OCSP Stapling: Verifies if server supports OCSP stapling for improved
 //     certificate revocation checking performance and privacy (OWASP ASVS 9.2.4)
 //
+// Client-Side Security Analysis:
+//
+//   Comprehensive client-side security assessments include:
+//   - Vulnerable JavaScript Libraries: Detects outdated libraries with known CVEs
+//     (jQuery, AngularJS, Lodash, Moment.js, Bootstrap, React, Vue)
+//     Tracks specific vulnerabilities: CVE-2020-11022, CVE-2020-11023, CVE-2019-10768,
+//     CVE-2019-10744, CVE-2022-24785, CVE-2019-8331
+//   - Anti-CSRF Protection: Analyzes CSRF tokens in meta tags, form inputs, headers,
+//     and cookies. Evaluates protection strength (none/weak/moderate/strong) based on
+//     synchronizer token pattern, double-submit cookies, and SameSite cookie attributes
+//   - Trusted Types: Checks for DOM-based XSS prevention via CSP require-trusted-types-for
+//     directive (modern browser protection against injection attacks)
+//   - Severity-based Recommendations: Provides actionable remediation guidance with
+//     CVSS scores and upgrade paths for vulnerable dependencies
+//
 package checker
 
