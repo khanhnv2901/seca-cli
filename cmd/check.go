@@ -158,6 +158,84 @@ All checks are safe, non-intrusive DNS queries only.`,
 	},
 }
 
+var checkNetworkCmd = &cobra.Command{
+	Use:   "network",
+	Short: "Run network exposure and takeover checks for an engagement's scope",
+	Long: `Perform network-layer safety checks for each scoped target.
+
+This command performs:
+- Subdomain takeover detection via DNS + HTTP fingerprints
+- Optional TCP port scanning with banner grabbing and risk insights
+
+All checks are passive and respect the engagement scope.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runCheckCommand(cmd, checkConfig{
+			CreateChecker: func(appCtx *AppContext, params checkParams) checker.Checker {
+				runtimeCfg := appCtx.Config.Check
+				netCfg := runtimeCfg.Network
+
+				var ports []int
+				if len(netCfg.Ports) > 0 {
+					ports = append([]int(nil), netCfg.Ports...)
+				}
+
+				return &checker.NetworkChecker{
+					Timeout:         time.Duration(runtimeCfg.TimeoutSecs) * time.Second,
+					PortScanTimeout: time.Duration(netCfg.PortScanTimeout) * time.Second,
+					EnablePortScan:  netCfg.EnablePortScan,
+					CommonPorts:     ports,
+					MaxPortWorkers:  netCfg.MaxPortWorkers,
+				}
+			},
+			CreateAuditFn: func(appCtx *AppContext, params checkParams, chk checker.Checker) func(string, checker.CheckResult, float64) error {
+				return func(target string, result checker.CheckResult, duration float64) error {
+					return AppendAuditRow(
+						appCtx.ResultsDir,
+						params.ID,
+						appCtx.Operator,
+						chk.Name(),
+						target,
+						result.Status,
+						result.HTTPStatus,
+						result.TLSExpiry,
+						result.Notes,
+						result.Error,
+						duration,
+					)
+				}
+			},
+			ResultsFilename:        "network_results.json",
+			TimeoutSecs:            cliConfig.Check.TimeoutSecs,
+			VerificationCmdBuilder: makeVerificationCommand("network_results.json"),
+			SupportsRawCapture:     false,
+			PrintSummary: func(results []checker.CheckResult, resultsPath, auditPath, auditHash, resultsHash string, hashAlgo HashAlgorithm) {
+				issues := 0
+				takeovers := 0
+				totalPorts := 0
+				for _, r := range results {
+					if r.NetworkSecurity == nil {
+						continue
+					}
+					netSec := r.NetworkSecurity
+					totalPorts += len(netSec.OpenPorts)
+					if len(netSec.Issues) > 0 {
+						issues++
+					}
+					if netSec.SubdomainTakeover != nil && netSec.SubdomainTakeover.Vulnerable {
+						takeovers++
+					}
+				}
+
+				fmt.Println(colorSuccess("Network check complete."))
+				fmt.Printf("%s %s\n", colorInfo("Results:"), resultsPath)
+				fmt.Printf("%s %s\n", colorInfo("Audit:"), auditPath)
+				fmt.Printf("%s audit: %s\n%s results: %s\n", hashAlgo.DisplayName(), auditHash, hashAlgo.DisplayName(), resultsHash)
+				fmt.Printf("Summary: %d target(s), %d with issues, %d takeover indicators, %d open port(s)\n", len(results), issues, takeovers, totalPorts)
+			},
+		})
+	},
+}
+
 // checkParams holds common parameters for check commands
 type checkParams struct {
 	ID             string
@@ -785,7 +863,20 @@ func init() {
 	checkDNSCmd.Flags().StringSliceVar(&cliConfig.Check.DNS.Nameservers, "nameservers", cliConfig.Check.DNS.Nameservers, "Custom DNS nameservers (e.g., 8.8.8.8:53,1.1.1.1:53)")
 	checkDNSCmd.Flags().IntVar(&cliConfig.Check.DNS.Timeout, "dns-timeout", cliConfig.Check.DNS.Timeout, "DNS query timeout in seconds")
 
+	// Network-specific flags
+	addCommonCheckFlags(checkNetworkCmd)
+	checkNetworkCmd.Flags().BoolVar(&cliConfig.Check.Network.EnablePortScan, "enable-port-scan", cliConfig.Check.Network.EnablePortScan, "Scan TCP ports for exposure and banner details")
+	checkNetworkCmd.Flags().IntSliceVar(&cliConfig.Check.Network.Ports, "ports", cliConfig.Check.Network.Ports, "Comma-separated list of TCP ports to scan (defaults to built-in set)")
+	checkNetworkCmd.Flags().IntVar(&cliConfig.Check.Network.PortScanTimeout, "port-scan-timeout", cliConfig.Check.Network.PortScanTimeout, "Per-port scan timeout in seconds")
+	checkNetworkCmd.Flags().IntVar(&cliConfig.Check.Network.MaxPortWorkers, "port-workers", cliConfig.Check.Network.MaxPortWorkers, "Concurrent port scan workers")
+	checkNetworkCmd.Flags().BoolVar(&cliConfig.Check.Crawl.Enabled, "crawl", cliConfig.Check.Crawl.Enabled, "Discover same-host links (auto-detects JavaScript/SPA sites)")
+	checkNetworkCmd.Flags().IntVar(&cliConfig.Check.Crawl.MaxDepth, "crawl-depth", cliConfig.Check.Crawl.MaxDepth, "Maximum link depth to follow per target")
+	checkNetworkCmd.Flags().IntVar(&cliConfig.Check.Crawl.MaxPages, "crawl-max-pages", cliConfig.Check.Crawl.MaxPages, "Maximum additional pages to discover per target")
+	checkNetworkCmd.Flags().BoolVar(&cliConfig.Check.Crawl.EnableJS, "crawl-force-js", cliConfig.Check.Crawl.EnableJS, "Force JavaScript crawler for all targets (overrides auto-detection)")
+	checkNetworkCmd.Flags().IntVar(&cliConfig.Check.Crawl.JSWaitTime, "crawl-js-wait", cliConfig.Check.Crawl.JSWaitTime, "Seconds to wait for JavaScript to render (when JS is used)")
+
 	checkCmd.AddCommand(checkHTTPCmd)
 	checkCmd.AddCommand(checkDNSCmd)
+	checkCmd.AddCommand(checkNetworkCmd)
 	registerPluginCommands()
 }

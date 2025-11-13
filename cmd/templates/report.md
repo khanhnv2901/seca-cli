@@ -12,6 +12,8 @@
 - **Completed At:** {{.CompletedAt}}
 - **Duration:** {{.Duration}}
 - **Total Targets:** {{.Metadata.TotalTargets}}
+{{if .ResultSources}}- **Result Files:** {{join .ResultSources ", "}}
+{{end}}
 {{if .Metadata.AuditHash}}- **Audit Hash ({{.HashAlgorithmLabel}}):** `{{.Metadata.AuditHash}}`{{end}}
 {{if .Metadata.SignatureFingerprint}}- **Signature Fingerprint:** `{{.Metadata.SignatureFingerprint}}`{{end}}
 
@@ -29,6 +31,16 @@
 | Run Time | Success Rate | Duration | Command |
 |----------|--------------|----------|---------|
 {{range .TrendHistory}}| {{formatTime .Timestamp}} | {{formatSuccess .SuccessRate}} | {{formatDuration .DurationSeconds}} | {{.Command}} |
+{{end}}
+
+{{end}}
+
+{{if .CheckCatalog}}
+## Security Check Catalog
+
+| Name | Category |
+|------|----------|
+{{range .CheckCatalog}}| {{.Name}} | {{.Category}} |
 {{end}}
 
 {{end}}

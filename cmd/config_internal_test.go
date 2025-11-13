@@ -106,4 +106,13 @@ func TestNewCLIConfigDefaults(t *testing.T) {
 	if !cfg.Check.Crawl.AutoDetectJS {
 		t.Fatalf("expected auto-detect JS to be enabled by default")
 	}
+	if cfg.Check.Network.EnablePortScan {
+		t.Fatalf("expected network port scanning to be disabled by default")
+	}
+	if cfg.Check.Network.PortScanTimeout != defaultPortScanTimeoutSecs {
+		t.Fatalf("unexpected default port scan timeout: %d", cfg.Check.Network.PortScanTimeout)
+	}
+	if cfg.Check.Network.MaxPortWorkers != defaultPortScanWorkers {
+		t.Fatalf("unexpected default port worker count: %d", cfg.Check.Network.MaxPortWorkers)
+	}
 }

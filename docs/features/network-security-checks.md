@@ -6,6 +6,10 @@ SECA-CLI now includes comprehensive network security assessments to detect infra
 
 ## Features
 
+### Optional Target Discovery
+
+Network checks can reuse the HTTP crawler to automatically expand each scoped host before scanning. Enable it with `--crawl` (and optional `--crawl-depth`, `--crawl-max-pages`, `--crawl-force-js`, `--crawl-js-wait`). Discovered URLs are normalized back to host-level targets so takeover detection and port scanning automatically include the additional assets.
+
 ### 1. Open Port Scanning
 
 Scans for open TCP ports and identifies potential security risks based on exposed services.
@@ -274,11 +278,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Run Network Security Check
+        env:
+          ENGAGEMENT_ID: ${{ secrets.ENGAGEMENT_ID }}
         run: |
-          seca check network --target ${{ secrets.DOMAIN }} \
+          seca check network --id "$ENGAGEMENT_ID" --roe-confirm \
             --enable-port-scan \
-            --ports 22,80,443,3306,3389 \
-            --output results.json
+            --ports 22,80,443,3306,3389
+
+          RESULTS="$HOME/.local/share/seca-cli/results/$ENGAGEMENT_ID/network_results.json"
+          cp "$RESULTS" results.json
 
       - name: Check for vulnerabilities
         run: |
@@ -314,15 +322,18 @@ spec:
             - -c
             - |
               seca check network \
-                --target $DOMAIN \
-                --enable-port-scan \
-                --output /results/network-$(date +%Y%m%d).json
+                --id "$ENGAGEMENT_ID" \
+                --roe-confirm \
+                --enable-port-scan
+
+              cp "$HOME/.local/share/seca-cli/results/$ENGAGEMENT_ID/network_results.json" \
+                 "/results/network-$(date +%Y%m%d).json"
             env:
-            - name: DOMAIN
+            - name: ENGAGEMENT_ID
               valueFrom:
                 configMapKeyRef:
                   name: seca-config
-                  key: domain
+                  key: engagement
             volumeMounts:
             - name: results
               mountPath: /results

@@ -9,8 +9,10 @@ import (
 )
 
 const (
-	defaultHTTPTimeoutSeconds = 10
-	defaultDNSTimeoutSeconds  = 10
+	defaultHTTPTimeoutSeconds  = 10
+	defaultDNSTimeoutSeconds   = 10
+	defaultPortScanTimeoutSecs = 2
+	defaultPortScanWorkers     = 10
 )
 
 // CLIConfig captures runtime configuration shared across commands.
@@ -43,6 +45,7 @@ type CheckRuntimeConfig struct {
 	RetryCount       int
 	DNS              DNSConfig
 	Crawl            CrawlConfig
+	Network          NetworkConfig
 }
 
 // DNSConfig groups DNS-specific runtime options.
@@ -53,12 +56,20 @@ type DNSConfig struct {
 
 // CrawlConfig captures HTTP crawl/discovery options.
 type CrawlConfig struct {
-	Enabled        bool
-	MaxDepth       int
-	MaxPages       int
-	EnableJS       bool
-	JSWaitTime     int // Time in seconds to wait for JavaScript to render
-	AutoDetectJS   bool
+	Enabled      bool
+	MaxDepth     int
+	MaxPages     int
+	EnableJS     bool
+	JSWaitTime   int // Time in seconds to wait for JavaScript to render
+	AutoDetectJS bool
+}
+
+// NetworkConfig captures network checker runtime options.
+type NetworkConfig struct {
+	EnablePortScan  bool
+	PortScanTimeout int
+	Ports           []int
+	MaxPortWorkers  int
 }
 
 type defaultOverrides struct {
@@ -100,6 +111,12 @@ func newCLIConfig() *CLIConfig {
 				EnableJS:     false,
 				JSWaitTime:   2,
 				AutoDetectJS: true, // Auto-detect by default when crawling is enabled
+			},
+			Network: NetworkConfig{
+				EnablePortScan:  false,
+				PortScanTimeout: defaultPortScanTimeoutSecs,
+				Ports:           nil,
+				MaxPortWorkers:  defaultPortScanWorkers,
 			},
 		},
 	}

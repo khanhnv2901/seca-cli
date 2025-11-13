@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"math"
 	"os"
+	"sort"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -24,8 +26,14 @@ const (
 	statsTLSSoonWindow   = 30 * 24 * time.Hour
 )
 
-//go:embed templates/report.html templates/report.md templates/vulnerability_report.html
+//go:embed templates/report.html templates/report.md
 var reportTemplateFS embed.FS
+
+var preferredResultFilenames = []string{
+	"results.json",
+	"network_results.json",
+	"dns_results.json",
+}
 
 var securityHeaderNames = []string{
 	"Strict-Transport-Security",
@@ -47,6 +55,7 @@ var (
 		"formatDuration":      formatDurationLabel,
 		"formatSuccess":       formatSuccessRate,
 		"lower":               strings.ToLower,
+		"riskBadgeClass":      riskBadgeClass,
 	}
 
 	markdownTemplateFuncs = template.FuncMap{
@@ -61,18 +70,11 @@ var (
 		"formatSuccess":          formatSuccessRate,
 	}
 
-	vulnTemplateFuncs = template.FuncMap{
-		"lower": strings.ToLower,
-	}
-
 	htmlReportTemplate = template.Must(
 		template.New("report.html").Funcs(htmlTemplateFuncs).ParseFS(reportTemplateFS, htmlTemplatePath),
 	)
 	markdownReportTemplate = template.Must(
 		template.New("report.md").Funcs(markdownTemplateFuncs).ParseFS(reportTemplateFS, markdownTemplatePath),
-	)
-	vulnReportTemplate = template.Must(
-		template.New("vulnerability_report.html").Funcs(vulnTemplateFuncs).ParseFS(reportTemplateFS, "templates/vulnerability_report.html"),
 	)
 )
 
@@ -101,24 +103,9 @@ var reportGenerateCmd = &cobra.Command{
 			return fmt.Errorf("invalid format: %s (must be json, md, html, or pdf)", format)
 		}
 
-		// Read results from results directory
-		path, err := resolveResultsPath(appCtx.ResultsDir, id, "results.json")
-		if err != nil {
-			return fmt.Errorf("resolve results path: %w", err)
-		}
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			return fmt.Errorf("no results found at %s", path)
-		}
-
-		data, err := os.ReadFile(path)
+		output, sources, err := loadAggregatedRunOutput(appCtx.ResultsDir, id)
 		if err != nil {
 			return err
-		}
-
-		// Parse results
-		var output RunOutput
-		if err := json.Unmarshal(data, &output); err != nil {
-			return fmt.Errorf("failed to parse results: %w", err)
 		}
 		normalizeRunMetadata(&output.Metadata)
 
@@ -133,18 +120,18 @@ var reportGenerateCmd = &cobra.Command{
 
 		switch format {
 		case "json":
-			reportContent, err = generateJSONReport(&output)
+			reportContent, err = generateJSONReport(output)
 			filename = "report.json"
 		case "md":
-			data := buildTemplateData(&output, "%.2f", trendHistory)
+			data := buildTemplateData(output, sources, "%.2f", trendHistory)
 			reportContent, err = generateMarkdownReport(data)
 			filename = "report.md"
 		case "html":
-			data := buildTemplateData(&output, "%.1f", trendHistory)
+			data := buildTemplateData(output, sources, "%.1f", trendHistory)
 			reportContent, err = generateHTMLReport(data)
 			filename = "report.html"
 		case "pdf":
-			data := buildTemplateData(&output, "%.1f", trendHistory)
+			data := buildTemplateData(output, sources, "%.1f", trendHistory)
 			pdfBytes, perr := generatePDFReportBytes(data)
 			if perr != nil {
 				return fmt.Errorf("failed to generate PDF report: %w", perr)
@@ -160,6 +147,9 @@ var reportGenerateCmd = &cobra.Command{
 			fmt.Printf("Report generated: %s\n", reportPath)
 			fmt.Printf("Format: %s\n", format)
 			fmt.Printf("Total targets: %d\n", output.Metadata.TotalTargets)
+			if len(sources) > 0 {
+				fmt.Printf("Result files included: %s\n", strings.Join(sources, ", "))
+			}
 			return nil
 		}
 
@@ -179,6 +169,9 @@ var reportGenerateCmd = &cobra.Command{
 		fmt.Printf("Report generated: %s\n", reportPath)
 		fmt.Printf("Format: %s\n", format)
 		fmt.Printf("Total targets: %d\n", output.Metadata.TotalTargets)
+		if len(sources) > 0 {
+			fmt.Printf("Result files included: %s\n", strings.Join(sources, ", "))
+		}
 
 		return nil
 	},
@@ -190,6 +183,129 @@ func generateJSONReport(output *RunOutput) (string, error) {
 		return "", err
 	}
 	return string(data), nil
+}
+
+func discoverResultFiles(resultsDir, engagementID string) ([]string, error) {
+	dirPath, err := resolveResultsPath(resultsDir, engagementID)
+	if err != nil {
+		return nil, err
+	}
+
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return nil, err
+	}
+
+	available := make(map[string]struct{})
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if strings.EqualFold(name, "results.json") || strings.HasSuffix(name, "_results.json") {
+			available[name] = struct{}{}
+		}
+	}
+
+	ordered := make([]string, 0, len(available))
+	for _, pref := range preferredResultFilenames {
+		if _, ok := available[pref]; ok {
+			ordered = append(ordered, pref)
+			delete(available, pref)
+		}
+	}
+	if len(available) > 0 {
+		extra := make([]string, 0, len(available))
+		for name := range available {
+			extra = append(extra, name)
+		}
+		sort.Strings(extra)
+		ordered = append(ordered, extra...)
+	}
+
+	return ordered, nil
+}
+
+func loadAggregatedRunOutput(resultsDir, engagementID string) (*RunOutput, []string, error) {
+	files, err := discoverResultFiles(resultsDir, engagementID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("discover result files: %w", err)
+	}
+	if len(files) == 0 {
+		return nil, nil, fmt.Errorf("no results found for engagement %s", engagementID)
+	}
+
+	var aggregated *RunOutput
+	var earliestStart time.Time
+	var latestComplete time.Time
+	sourcesUsed := make([]string, 0, len(files))
+
+	for _, name := range files {
+		path, err := resolveResultsPath(resultsDir, engagementID, name)
+		if err != nil {
+			return nil, nil, fmt.Errorf("resolve results path for %s: %w", name, err)
+		}
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			return nil, nil, fmt.Errorf("read %s: %w", path, err)
+		}
+
+		var current RunOutput
+		if err := json.Unmarshal(data, &current); err != nil {
+			return nil, nil, fmt.Errorf("parse %s: %w", name, err)
+		}
+		if len(current.Results) == 0 {
+			continue
+		}
+
+		sourcesUsed = append(sourcesUsed, name)
+
+		if aggregated == nil {
+			aggregated = &RunOutput{
+				Metadata: current.Metadata,
+				Results:  append([]checker.CheckResult(nil), current.Results...),
+			}
+			earliestStart = current.Metadata.StartAt
+			latestComplete = current.Metadata.CompleteAt
+			continue
+		}
+
+		aggregated.Results = append(aggregated.Results, current.Results...)
+		if isEarlier(current.Metadata.StartAt, earliestStart) {
+			earliestStart = current.Metadata.StartAt
+		}
+		if current.Metadata.CompleteAt.After(latestComplete) {
+			latestComplete = current.Metadata.CompleteAt
+		}
+	}
+
+	if aggregated == nil {
+		return nil, nil, fmt.Errorf("no results found for engagement %s", engagementID)
+	}
+
+	if !earliestStart.IsZero() && (aggregated.Metadata.StartAt.IsZero() || earliestStart.Before(aggregated.Metadata.StartAt)) {
+		aggregated.Metadata.StartAt = earliestStart
+	}
+	if !latestComplete.IsZero() && latestComplete.After(aggregated.Metadata.CompleteAt) {
+		aggregated.Metadata.CompleteAt = latestComplete
+	}
+	aggregated.Metadata.TotalTargets = len(aggregated.Results)
+
+	return aggregated, sourcesUsed, nil
+}
+
+func isEarlier(candidate, reference time.Time) bool {
+	if candidate.IsZero() {
+		return false
+	}
+	if reference.IsZero() {
+		return true
+	}
+	return candidate.Before(reference)
 }
 
 func normalizeRunMetadata(meta *RunMetadata) {
@@ -212,6 +328,8 @@ func generateMarkdownReport(data TemplateData) (string, error) {
 type TemplateData struct {
 	Metadata           RunMetadata
 	Results            []checker.CheckResult
+	ResultSources      []string
+	CheckCatalog       []SecurityCheckSpec
 	GeneratedAt        string
 	StartedAt          string
 	CompletedAt        string
@@ -331,6 +449,21 @@ func formatSuccessRate(rate float64) string {
 	return fmt.Sprintf("%.1f%%", rate)
 }
 
+func riskBadgeClass(risk string) string {
+	switch strings.ToLower(strings.TrimSpace(risk)) {
+	case "critical":
+		return "badge-critical"
+	case "high":
+		return "badge-high"
+	case "medium":
+		return "badge-medium"
+	case "low":
+		return "badge-low"
+	default:
+		return "badge-info"
+	}
+}
+
 func generatePDFReportBytes(data TemplateData) ([]byte, error) {
 	pdf := gofpdf.New("P", "mm", "A4", "")
 	pdf.AddPage()
@@ -346,6 +479,9 @@ func generatePDFReportBytes(data TemplateData) ([]byte, error) {
 	pdf.CellFormat(0, 6, fmt.Sprintf("Operator: %s", data.Metadata.Operator), "", 1, "", false, 0, "")
 	pdf.CellFormat(0, 6, fmt.Sprintf("Started: %s", data.StartedAt), "", 1, "", false, 0, "")
 	pdf.CellFormat(0, 6, fmt.Sprintf("Completed: %s", data.CompletedAt), "", 1, "", false, 0, "")
+	if len(data.ResultSources) > 0 {
+		pdf.CellFormat(0, 6, fmt.Sprintf("Result files: %s", strings.Join(data.ResultSources, ", ")), "", 1, "", false, 0, "")
+	}
 	pdf.Ln(5)
 
 	// Summary section
@@ -355,6 +491,17 @@ func generatePDFReportBytes(data TemplateData) ([]byte, error) {
 	pdf.CellFormat(0, 6, fmt.Sprintf("Success: %d | Errors: %d | Success Rate: %s",
 		data.SuccessCount, data.ErrorCount, data.SuccessRate), "", 1, "", false, 0, "")
 	pdf.Ln(5)
+
+	// Security check catalog
+	if len(data.CheckCatalog) > 0 {
+		pdf.SetFont("Arial", "B", 12)
+		pdf.CellFormat(0, 8, "Security Check Catalog", "", 1, "", false, 0, "")
+		pdf.SetFont("Arial", "", 9)
+		for _, check := range data.CheckCatalog {
+			pdf.MultiCell(0, 5, fmt.Sprintf("• %s — %s", check.Name, check.Category), "", "", false)
+		}
+		pdf.Ln(3)
+	}
 
 	// Trend Analysis section (if available)
 	if len(data.TrendHistory) > 0 {
@@ -495,7 +642,7 @@ func generatePDFReportBytes(data TemplateData) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func buildTemplateData(output *RunOutput, successRateFmt string, trends []TelemetryRecord) TemplateData {
+func buildTemplateData(output *RunOutput, sources []string, successRateFmt string, trends []TelemetryRecord) TemplateData {
 	normalizeRunMetadata(&output.Metadata)
 	okCount, errorCount := summarizeResults(output.Results)
 	total := len(output.Results)
@@ -513,6 +660,8 @@ func buildTemplateData(output *RunOutput, successRateFmt string, trends []Teleme
 	return TemplateData{
 		Metadata:           output.Metadata,
 		Results:            output.Results,
+		ResultSources:      append([]string(nil), sources...),
+		CheckCatalog:       getSecurityCheckCatalog(),
 		GeneratedAt:        now.Format(time.RFC3339),
 		StartedAt:          output.Metadata.StartAt.Format(time.RFC3339),
 		CompletedAt:        output.Metadata.CompleteAt.Format(time.RFC3339),
@@ -742,75 +891,6 @@ var reportTelemetryCmd = &cobra.Command{
 	},
 }
 
-var reportVulnCmd = &cobra.Command{
-	Use:   "vulnerability",
-	Short: "Generate detailed vulnerability report with security findings",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		appCtx := getAppContext(cmd)
-
-		id, _ := cmd.Flags().GetString("id")
-		if id == "" {
-			return fmt.Errorf("--id is required")
-		}
-
-		// Read results
-		path, err := resolveResultsPath(appCtx.ResultsDir, id, "results.json")
-		if err != nil {
-			return fmt.Errorf("resolve results path: %w", err)
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-
-		var output RunOutput
-		if err := json.Unmarshal(data, &output); err != nil {
-			return err
-		}
-
-		// Build vulnerability report
-		scanURL := output.Metadata.EngagementName
-		if len(output.Results) > 0 {
-			scanURL = output.Results[0].Target
-		}
-
-		startTime := output.Metadata.StartAt.Format("2006-01-02 15:04")
-		duration := output.Metadata.CompleteAt.Sub(output.Metadata.StartAt)
-
-		vulnReport := checker.BuildVulnerabilityReport(
-			output.Results,
-			scanURL,
-			startTime,
-			formatDurationLabel(duration.Seconds()),
-		)
-
-		// Generate HTML report
-		var buf strings.Builder
-		if err := vulnReportTemplate.Execute(&buf, vulnReport); err != nil {
-			return fmt.Errorf("failed to generate vulnerability report: %w", err)
-		}
-
-		// Write report
-		reportPath, err := resolveResultsPath(appCtx.ResultsDir, id, "vulnerability_report.html")
-		if err != nil {
-			return fmt.Errorf("resolve report path: %w", err)
-		}
-
-		if err := os.WriteFile(reportPath, []byte(buf.String()), consts.DefaultFilePerm); err != nil {
-			return fmt.Errorf("failed to write report: %w", err)
-		}
-
-		fmt.Printf("Vulnerability report generated: %s\n", reportPath)
-		fmt.Printf("Total findings: %d\n", vulnReport.Summary.Total)
-		fmt.Printf("  Critical: %d\n", vulnReport.Summary.Critical)
-		fmt.Printf("  High: %d\n", vulnReport.Summary.High)
-		fmt.Printf("  Medium: %d\n", vulnReport.Summary.Medium)
-		fmt.Printf("  Low: %d\n", vulnReport.Summary.Low)
-
-		return nil
-	},
-}
-
 func init() {
 	reportGenerateCmd.Flags().String("id", "", "Engagement ID")
 	reportGenerateCmd.Flags().String("format", "md", "Output format: json|md|html|pdf")
@@ -819,9 +899,7 @@ func init() {
 	reportTelemetryCmd.Flags().String("id", "", "Engagement ID")
 	reportTelemetryCmd.Flags().String("format", "ascii", "Output format: ascii|json")
 	reportTelemetryCmd.Flags().Int("limit", 10, "Number of recent runs to display")
-	reportVulnCmd.Flags().String("id", "", "Engagement ID")
 	reportCmd.AddCommand(reportGenerateCmd)
 	reportCmd.AddCommand(reportStatsCmd)
 	reportCmd.AddCommand(reportTelemetryCmd)
-	reportCmd.AddCommand(reportVulnCmd)
 }

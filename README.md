@@ -282,9 +282,6 @@ Crawling Options:
 # Generate engagement report
 seca report generate --id <id> [--format markdown|html|pdf|json]
 
-# Generate detailed vulnerability report with CVSS scores
-seca report vulnerability --id <id>
-
 # View engagement statistics
 seca report stats --id <id> [--format table|json|csv|markdown]
 
@@ -673,7 +670,7 @@ See [Compliance Guide](docs/operator-guide/compliance.md) for detailed complianc
 
 ## Vulnerability Reporting
 
-SECA-CLI generates detailed vulnerability reports that analyze security findings and present them in an easy-to-understand format with:
+`seca report generate --format html` produces a comprehensive vulnerability dashboard inside the primary engagement report. It includes:
 
 - **Security Findings by Severity** - Critical, High, Medium, Low categorization
 - **Detailed Descriptions** - Comprehensive explanations of each vulnerability
@@ -689,11 +686,11 @@ SECA-CLI generates detailed vulnerability reports that analyze security findings
 # Run security scan with crawling
 ./seca-cli check http --id <engagement-id> --roe-confirm --crawl
 
-# Generate detailed vulnerability report
-./seca-cli report vulnerability --id <engagement-id>
+# Generate HTML report (includes vulnerability findings)
+./seca-cli report generate --id <engagement-id> --format html
 
-# Report is saved as HTML:
-# ~/.local/share/seca-cli/results/<engagement-id>/vulnerability_report.html
+# Report is saved as:
+# ~/.local/share/seca-cli/results/<engagement-id>/report.html
 ```
 
 ### Report Features

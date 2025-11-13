@@ -559,6 +559,78 @@ SHA-256 results: 5678901234abcdef5678901234abcdef5678901234abcdef5678901234abcde
 
 ---
 
+### seca check network
+
+Run network exposure and subdomain takeover checks.
+
+```bash
+seca check network --id <id> --roe-confirm [flags] <scope targets>
+```
+
+**Required Flags:**
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--id` | string | Engagement ID |
+| `--roe-confirm` | bool | Confirm Rules of Engagement |
+
+**Check-Specific Flags:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--enable-port-scan` | bool | false | Scan common TCP ports for exposure |
+| `--ports` | []int | built-in set | Override the comma-separated list of ports to scan |
+| `--port-scan-timeout` | int | 2 | Per-port scan timeout in seconds |
+| `--port-workers` | int | 10 | Concurrent port scan workers |
+| `--crawl` | bool | false | Discover in-scope links before running checks |
+| `--crawl-depth` | int | 1 | Maximum link depth when crawling |
+| `--crawl-max-pages` | int | 25 | Maximum additional pages per target |
+| `--crawl-force-js` | bool | false | Force JavaScript-enabled crawler (skip auto-detect) |
+| `--crawl-js-wait` | int | 2 | Seconds to wait for JS rendering when enabled |
+
+**Examples:**
+
+```bash
+# Subdomain takeover detection only
+seca check network --id eng123 --roe-confirm example.com
+
+# Enable port scanning with custom list
+seca check network --id eng123 --roe-confirm \
+  --enable-port-scan \
+  --ports 22,80,443,3389 \
+  corp.example.com
+
+# Faster scans inside CI by tuning workers
+seca check network --id ci-run --roe-confirm \
+  --enable-port-scan \
+  --port-workers 25 \
+  --port-scan-timeout 1 \
+  --ports 22,80,443,8080,8443 \
+  --targets-file hosts.txt
+
+# Crawl same-host links, then scan
+seca check network --id eng123 --roe-confirm \
+  --crawl --crawl-depth 2 --crawl-max-pages 30 \
+  --enable-port-scan example.com
+```
+
+**Checks Performed:**
+- DNS + HTTP fingerprinting for subdomain takeover conditions
+- Optional TCP port scanning with banner grabbing
+- Risk classification for exposed services (critical/high/medium/low/info)
+- Issue + recommendation synthesis in `network_security` results
+
+**Output:**
+```
+Running network checks for engagement 'eng123'...
+
+Summary: 4 target(s), 2 with issues, 1 takeover indicators, 5 open port(s)
+Results: /home/user/.local/share/seca-cli/results/eng123/network_results.json
+Audit:   /home/user/.local/share/seca-cli/results/eng123/audit.csv
+```
+
+---
+
 ### seca check [plugin-name]
 
 Run custom plugin checks (see [Plugin Development Guide](../developer-guide/plugin-development.md)).
@@ -591,6 +663,8 @@ Generate a summary report for an engagement.
 ```bash
 seca report generate --id <id> [flags]
 ```
+
+The report command automatically aggregates findings from every standard result file in the engagement directory (`results.json`, `network_results.json`, `dns_results.json`) so that HTTP, network, and DNS checks appear in a single document.
 
 **Required Flags:**
 

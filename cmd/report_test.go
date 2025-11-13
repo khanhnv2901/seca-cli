@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -92,7 +93,7 @@ func TestGenerateMarkdownReport(t *testing.T) {
 		},
 	}
 
-	report, err := generateMarkdownReport(buildTemplateData(output, "%.2f", nil))
+	report, err := generateMarkdownReport(buildTemplateData(output, nil, "%.2f", nil))
 	if err != nil {
 		t.Fatalf("Failed to generate Markdown report: %v", err)
 	}
@@ -112,6 +113,14 @@ func TestGenerateMarkdownReport(t *testing.T) {
 
 	if !strings.Contains(report, "## Results") {
 		t.Error("Expected Results section in markdown report")
+	}
+
+	if !strings.Contains(report, "## Security Check Catalog") {
+		t.Error("Expected Security Check Catalog section in markdown report")
+	}
+
+	if !strings.Contains(report, "Frame Security Policy (X-Frame-Options)") {
+		t.Error("Expected security check catalog entries in markdown report")
 	}
 
 	// Verify metadata is present
@@ -177,7 +186,7 @@ func TestGenerateHTMLReport(t *testing.T) {
 		},
 	}
 
-	report, err := generateHTMLReport(buildTemplateData(output, "%.1f", nil))
+	report, err := generateHTMLReport(buildTemplateData(output, nil, "%.1f", nil))
 	if err != nil {
 		t.Fatalf("Failed to generate HTML report: %v", err)
 	}
@@ -216,6 +225,14 @@ func TestGenerateHTMLReport(t *testing.T) {
 	// Verify metadata is present
 	if !strings.Contains(report, "Test Engagement") {
 		t.Error("Expected engagement name in HTML report")
+	}
+
+	if !strings.Contains(report, "Security Check Catalog") {
+		t.Error("Expected Security Check Catalog section in HTML report")
+	}
+
+	if !strings.Contains(report, "Frame Security Policy (X-Frame-Options)") {
+		t.Error("Expected catalog entry in HTML report")
 	}
 
 	if !strings.Contains(report, "test-operator") {
@@ -262,6 +279,77 @@ func TestGenerateHTMLReport(t *testing.T) {
 	}
 }
 
+func TestLoadAggregatedRunOutput(t *testing.T) {
+	t.Parallel()
+
+	resultsDir := t.TempDir()
+	const engagementID = "agg-eng"
+	if _, err := ensureResultsDir(resultsDir, engagementID); err != nil {
+		t.Fatalf("ensureResultsDir() error = %v", err)
+	}
+
+	httpStart := time.Date(2025, 1, 1, 10, 0, 0, 0, time.UTC)
+	httpComplete := httpStart.Add(2 * time.Minute)
+	networkStart := time.Date(2025, 1, 2, 9, 0, 0, 0, time.UTC)
+	networkComplete := networkStart.Add(3 * time.Minute)
+
+	writeRunOutputFile(t, resultsDir, engagementID, "results.json", RunOutput{
+		Metadata: RunMetadata{
+			EngagementID: engagementID,
+			StartAt:      httpStart,
+			CompleteAt:   httpComplete,
+		},
+		Results: []checker.CheckResult{{Target: "https://app.example.com", Status: "ok"}},
+	})
+	writeRunOutputFile(t, resultsDir, engagementID, "network_results.json", RunOutput{
+		Metadata: RunMetadata{
+			EngagementID: engagementID,
+			StartAt:      networkStart,
+			CompleteAt:   networkComplete,
+		},
+		Results: []checker.CheckResult{{Target: "api.example.com", Status: "ok"}},
+	})
+
+	output, sources, err := loadAggregatedRunOutput(resultsDir, engagementID)
+	if err != nil {
+		t.Fatalf("loadAggregatedRunOutput() error = %v", err)
+	}
+
+	if got := len(output.Results); got != 2 {
+		t.Fatalf("expected 2 results, got %d", got)
+	}
+	if !output.Metadata.StartAt.Equal(httpStart) {
+		t.Fatalf("expected start time %v, got %v", httpStart, output.Metadata.StartAt)
+	}
+	if !output.Metadata.CompleteAt.Equal(networkComplete) {
+		t.Fatalf("expected complete time %v, got %v", networkComplete, output.Metadata.CompleteAt)
+	}
+	if output.Metadata.TotalTargets != 2 {
+		t.Fatalf("expected TotalTargets 2, got %d", output.Metadata.TotalTargets)
+	}
+	if output.Results[0].Target != "https://app.example.com" {
+		t.Fatalf("expected first target from HTTP results, got %s", output.Results[0].Target)
+	}
+	if len(sources) != 2 || sources[0] != "results.json" || sources[1] != "network_results.json" {
+		t.Fatalf("unexpected sources: %v", sources)
+	}
+}
+
+func writeRunOutputFile(t *testing.T, resultsDir, engagementID, filename string, output RunOutput) {
+	t.Helper()
+	path, err := resolveResultsPath(resultsDir, engagementID, filename)
+	if err != nil {
+		t.Fatalf("resolveResultsPath() error = %v", err)
+	}
+	data, err := json.Marshal(output)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+}
+
 func TestGenerateMarkdownReport_EmptyResults(t *testing.T) {
 	output := &RunOutput{
 		Metadata: RunMetadata{
@@ -276,7 +364,7 @@ func TestGenerateMarkdownReport_EmptyResults(t *testing.T) {
 		Results: []checker.CheckResult{},
 	}
 
-	report, err := generateMarkdownReport(buildTemplateData(output, "%.2f", nil))
+	report, err := generateMarkdownReport(buildTemplateData(output, nil, "%.2f", nil))
 	if err != nil {
 		t.Fatalf("Failed to generate markdown report for empty results: %v", err)
 	}
@@ -304,7 +392,7 @@ func TestGenerateHTMLReport_EmptyResults(t *testing.T) {
 		Results: []checker.CheckResult{},
 	}
 
-	report, err := generateHTMLReport(buildTemplateData(output, "%.1f", nil))
+	report, err := generateHTMLReport(buildTemplateData(output, nil, "%.1f", nil))
 	if err != nil {
 		t.Fatalf("Failed to generate HTML report for empty results: %v", err)
 	}
@@ -341,7 +429,7 @@ func TestGenerateMarkdownReport_SummaryStatistics(t *testing.T) {
 		},
 	}
 
-	report, err := generateMarkdownReport(buildTemplateData(output, "%.2f", nil))
+	report, err := generateMarkdownReport(buildTemplateData(output, nil, "%.2f", nil))
 	if err != nil {
 		t.Fatalf("Failed to generate markdown report: %v", err)
 	}
@@ -379,7 +467,7 @@ func TestGenerateHTMLReport_SummaryStatistics(t *testing.T) {
 		},
 	}
 
-	report, err := generateHTMLReport(buildTemplateData(output, "%.1f", nil))
+	report, err := generateHTMLReport(buildTemplateData(output, nil, "%.1f", nil))
 	if err != nil {
 		t.Fatalf("Failed to generate HTML report: %v", err)
 	}
@@ -417,7 +505,7 @@ func TestGenerateMarkdownReport_DurationCalculation(t *testing.T) {
 		},
 	}
 
-	report, err := generateMarkdownReport(buildTemplateData(output, "%.2f", nil))
+	report, err := generateMarkdownReport(buildTemplateData(output, nil, "%.2f", nil))
 	if err != nil {
 		t.Fatalf("Failed to generate markdown report: %v", err)
 	}
@@ -448,7 +536,7 @@ func TestGenerateHTMLReport_SpecialCharactersEscaping(t *testing.T) {
 		},
 	}
 
-	report, err := generateHTMLReport(buildTemplateData(output, "%.1f", nil))
+	report, err := generateHTMLReport(buildTemplateData(output, nil, "%.1f", nil))
 	if err != nil {
 		t.Fatalf("Failed to generate HTML report: %v", err)
 	}
@@ -485,7 +573,7 @@ func TestGenerateMarkdownReport_OptionalFields(t *testing.T) {
 		},
 	}
 
-	report, err := generateMarkdownReport(buildTemplateData(output, "%.2f", nil))
+	report, err := generateMarkdownReport(buildTemplateData(output, nil, "%.2f", nil))
 	if err != nil {
 		t.Fatalf("Failed to generate markdown report: %v", err)
 	}

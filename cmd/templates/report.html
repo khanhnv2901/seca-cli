@@ -187,6 +187,34 @@ tr:hover {
     margin: 10px 0;
     border-radius: 3px;
 }
+.network-issues {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 10px 0;
+}
+.badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.85em;
+    font-weight: 600;
+}
+.badge-critical { background-color: #dc3545; color: #fff; }
+.badge-high { background-color: #fd7e14; color: #fff; }
+.badge-medium { background-color: #ffc107; color: #343a40; }
+.badge-low { background-color: #28a745; color: #fff; }
+.badge-info { background-color: #17a2b8; color: #fff; }
+.ports-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+.ports-table th,
+.ports-table td {
+    border: 1px solid #e0e0e0;
+    padding: 8px;
+}
 .recommendation {
     background-color: #d1ecf1;
     border-left: 4px solid #17a2b8;
@@ -261,6 +289,9 @@ li {
         <div class="metadata-item"><span class="metadata-label">Completed At:</span> {{.CompletedAt}}</div>
         <div class="metadata-item"><span class="metadata-label">Duration:</span> {{.Duration}}</div>
         <div class="metadata-item"><span class="metadata-label">Total Targets:</span> {{.Metadata.TotalTargets}}</div>
+        {{if .ResultSources}}
+        <div class="metadata-item"><span class="metadata-label">Result Files:</span> {{join .ResultSources ", "}}</div>
+        {{end}}
         {{if .Metadata.AuditHash}}
         <div class="metadata-item"><span class="metadata-label">Audit Hash ({{.HashAlgorithmLabel}}):</span> <span class="code">{{.Metadata.AuditHash}}</span></div>
         {{end}}
@@ -315,6 +346,26 @@ li {
             <div class="summary-number">{{.SuccessRate}}%</div>
         </div>
     </div>
+
+    {{if .CheckCatalog}}
+    <h2>Security Check Catalog</h2>
+    <table>
+        <thead>
+        <tr>
+            <th>Name</th>
+            <th>Category</th>
+        </tr>
+        </thead>
+        <tbody>
+        {{range .CheckCatalog}}
+        <tr>
+            <td>{{.Name}}</td>
+            <td>{{.Category}}</td>
+        </tr>
+        {{end}}
+        </tbody>
+    </table>
+    {{end}}
 
     <h2>Results Overview</h2>
     <table>
@@ -537,6 +588,74 @@ li {
             {{if $result.CachePolicy.Issues}}
             <h5>Issues:</h5>
             <ul>{{range $result.CachePolicy.Issues}}<li>{{.}}</li>{{end}}</ul>
+            {{end}}
+        </div>
+        {{end}}
+
+        {{if $result.NetworkSecurity}}
+        {{$net := $result.NetworkSecurity}}
+        <div class="section">
+            <h4>Network Exposure Analysis</h4>
+
+            {{if $net.SubdomainTakeover}}
+            <div class="info-grid">
+                <div class="info-item"><span class="info-label">Subdomain Takeover:</span>
+                    {{if $net.SubdomainTakeover.Vulnerable}}<span class="status-error">VULNERABLE</span>{{else}}<span class="status-ok">No indicators</span>{{end}}
+                </div>
+                {{if $net.SubdomainTakeover.CNAME}}<div class="info-item"><span class="info-label">CNAME:</span> {{$net.SubdomainTakeover.CNAME}}</div>{{end}}
+                {{if $net.SubdomainTakeover.Provider}}<div class="info-item"><span class="info-label">Provider:</span> {{$net.SubdomainTakeover.Provider}}</div>{{end}}
+                {{if $net.SubdomainTakeover.ResolvedIPs}}<div class="info-item"><span class="info-label">Resolved IPs:</span> {{join $net.SubdomainTakeover.ResolvedIPs ", "}}</div>{{end}}
+            </div>
+            {{if $net.SubdomainTakeover.Recommendation}}
+            <div class="warning">{{$net.SubdomainTakeover.Recommendation}}</div>
+            {{end}}
+            {{end}}
+
+            {{if gt (len $net.OpenPorts) 0}}
+            <h5>Open Ports</h5>
+            <table class="ports-table">
+                <thead>
+                    <tr>
+                        <th>Port</th>
+                        <th>Service</th>
+                        <th>Risk</th>
+                        <th>Banner</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range $net.OpenPorts}}
+                    <tr>
+                        <td>{{.Port}}/{{.Protocol}}</td>
+                        <td>{{.Service}}</td>
+                        <td><span class="badge {{riskBadgeClass .Risk}}">{{.Risk}}</span></td>
+                        <td>{{if .Banner}}<span class="code">{{.Banner}}</span>{{else}}-{{end}}</td>
+                        <td>{{.Description}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+            {{end}}
+
+            {{if or (gt (len $net.Issues) 0) (gt (len $net.Recommendations) 0)}}
+            <div class="network-issues">
+                {{if gt (len $net.Issues) 0}}
+                <div>
+                    <strong>Issues</strong>
+                    <ul>
+                        {{range $net.Issues}}<li>⚠️ {{.}}</li>{{end}}
+                    </ul>
+                </div>
+                {{end}}
+                {{if gt (len $net.Recommendations) 0}}
+                <div>
+                    <strong>Recommendations</strong>
+                    <ul>
+                        {{range $net.Recommendations}}<li>💡 {{.}}</li>{{end}}
+                    </ul>
+                </div>
+                {{end}}
+            </div>
             {{end}}
         </div>
         {{end}}

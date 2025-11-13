@@ -84,6 +84,22 @@ var engagementAddScopeCmd = &cobra.Command{
 	},
 }
 
+var engagementRemoveScopeCmd = &cobra.Command{
+	Use:   "remove-scope",
+	Short: "Remove scope entries (URLs/hosts) from an engagement",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		id, _ := cmd.Flags().GetString("id")
+		if id == "" {
+			return fmt.Errorf("--id is required")
+		}
+		domains, _ := cmd.Flags().GetStringSlice("domain")
+		if len(domains) == 0 {
+			return fmt.Errorf("--domain is required (one or more domains to remove)")
+		}
+		return removeScopeEntries(id, domains)
+	},
+}
+
 var engagementViewCmd = &cobra.Command{
 	Use:   "view",
 	Short: "Show a single engagement as JSON",
@@ -148,6 +164,9 @@ func init() {
 	engagementAddScopeCmd.Flags().String("id", "", "Engagement id")
 	engagementAddScopeCmd.Flags().StringSlice("scope", []string{}, "Scope entries (URLs/hosts)")
 	engagementCmd.AddCommand(engagementAddScopeCmd)
+	engagementRemoveScopeCmd.Flags().String("id", "", "Engagement id")
+	engagementRemoveScopeCmd.Flags().StringSlice("domain", []string{}, "Domains to remove from scope")
+	engagementCmd.AddCommand(engagementRemoveScopeCmd)
 	engagementViewCmd.Flags().String("id", "", "Engagement id")
 	engagementCmd.AddCommand(engagementViewCmd)
 	engagementDeleteCmd.Flags().String("id", "", "Engagement id")
@@ -244,6 +263,89 @@ func addScopeEntries(id string, entries []string) error {
 	}
 	saveEngagements(list)
 	fmt.Printf("%s scope %v to engagement %s\n", colorSuccess("Added"), normalizedScope, id)
+	return nil
+}
+
+func removeScopeEntries(id string, domainsToRemove []string) error {
+	if id == "" {
+		return errors.New("--id is required")
+	}
+	if len(domainsToRemove) == 0 {
+		return errors.New("--domain must contain one or more domains to remove")
+	}
+
+	list := loadEngagements()
+	engIndex := -1
+	for i := range list {
+		if list[i].ID == id {
+			engIndex = i
+			break
+		}
+	}
+
+	if engIndex == -1 {
+		return &EngagementNotFoundError{ID: id}
+	}
+
+	currentScope := list[engIndex].Scope
+	if len(currentScope) == 0 {
+		return fmt.Errorf("engagement %s has no scope entries to remove", id)
+	}
+
+	// Build a set of domains to remove for efficient lookup
+	toRemove := make(map[string]bool)
+	for _, domain := range domainsToRemove {
+		toRemove[strings.TrimSpace(domain)] = true
+	}
+
+	// Filter out the domains to remove
+	newScope := []string{}
+	removed := []string{}
+	notFound := []string{}
+
+	for _, entry := range currentScope {
+		if toRemove[entry] {
+			removed = append(removed, entry)
+		} else {
+			newScope = append(newScope, entry)
+		}
+	}
+
+	// Check which requested domains were not found in scope
+	for domain := range toRemove {
+		found := false
+		for _, r := range removed {
+			if r == domain {
+				found = true
+				break
+			}
+		}
+		if !found {
+			notFound = append(notFound, domain)
+		}
+	}
+
+	// Validate we're not removing ALL scope entries
+	if len(newScope) == 0 {
+		return fmt.Errorf("cannot remove all scope entries - at least one must remain. Use 'engagement delete' to remove the entire engagement")
+	}
+
+	// If nothing was actually removed, report error
+	if len(removed) == 0 {
+		return fmt.Errorf("none of the specified domains were found in engagement scope: %v", domainsToRemove)
+	}
+
+	// Update the engagement
+	list[engIndex].Scope = newScope
+	saveEngagements(list)
+
+	// Report results
+	fmt.Printf("%s scope entries from engagement %s: %v\n", colorSuccess("Removed"), id, removed)
+	if len(notFound) > 0 {
+		fmt.Printf("%s domains not found in scope (skipped): %v\n", colorWarn("Warning:"), notFound)
+	}
+	fmt.Printf("Remaining scope entries: %v\n", newScope)
+
 	return nil
 }
 
