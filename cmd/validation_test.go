@@ -2,10 +2,6 @@ package cmd
 
 import "testing"
 
-type stubAppContext struct {
-	Operator string
-}
-
 func TestValidateCheckParams_Success(t *testing.T) {
 	params := checkParams{
 		ID:         "eng123",

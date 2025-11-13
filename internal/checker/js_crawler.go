@@ -134,7 +134,7 @@ func fetchPageWithJS(ctx context.Context, targetURL string, waitTime time.Durati
 
 	// Also extract links from React Router and other SPA frameworks
 	var reactLinks []string
-	chromedp.Run(ctx,
+	_ = chromedp.Run(ctx,
 		chromedp.Evaluate(`
 			(function() {
 				var links = [];

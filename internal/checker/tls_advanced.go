@@ -133,7 +133,7 @@ func CheckOCSPStapling(connState *tls.ConnectionState) bool {
 	}
 
 	// Check if OCSP response is present and valid
-	if connState.OCSPResponse != nil && len(connState.OCSPResponse) > 0 {
+	if len(connState.OCSPResponse) > 0 {
 		return true
 	}
 

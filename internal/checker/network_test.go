@@ -151,7 +151,7 @@ func TestCheckHTTPFingerprints_GitHubPages(t *testing.T) {
 	// Create test server that returns GitHub Pages error
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte("There isn't a GitHub Pages site here."))
+		_, _ = w.Write([]byte("There isn't a GitHub Pages site here."))
 	}))
 	defer server.Close()
 
@@ -181,7 +181,7 @@ func TestCheckHTTPFingerprints_AWSS3(t *testing.T) {
 	// Create test server that returns AWS S3 error
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+		_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
 <Error>
   <Code>NoSuchBucket</Code>
   <Message>The specified bucket does not exist</Message>
@@ -210,7 +210,7 @@ func TestCheckHTTPFingerprints_NoVulnerability(t *testing.T) {
 	// Create test server that returns normal content
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("<html><body>Normal website content</body></html>"))
+		_, _ = w.Write([]byte("<html><body>Normal website content</body></html>"))
 	}))
 	defer server.Close()
 
@@ -328,7 +328,7 @@ func TestCheckPort_Open(t *testing.T) {
 			if err != nil {
 				return
 			}
-			conn.Write([]byte("TEST BANNER\n"))
+			_, _ = conn.Write([]byte("TEST BANNER\n"))
 			conn.Close()
 		}
 	}()

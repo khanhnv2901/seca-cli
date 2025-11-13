@@ -463,7 +463,7 @@ func (n *NetworkChecker) checkPort(ctx context.Context, host string, port int) *
 	}
 
 	// Try to grab banner (with short timeout)
-	conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(1 * time.Second))
 	banner := make([]byte, 512)
 	bytesRead, readErr := conn.Read(banner)
 	if readErr == nil && bytesRead > 0 {
