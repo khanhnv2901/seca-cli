@@ -101,6 +101,15 @@ func AnalyzeTLSCompliance(connState *tls.ConnectionState) *TLSComplianceResult {
 		checkCertificateCompliance(result.CertificateInfo, connState, result)
 	}
 
+	// Check OCSP Stapling (OWASP ASVS 9.2.4, RFC 6066)
+	result.OCSPStapling = CheckOCSPStapling(connState)
+	if result.OCSPStapling {
+		result.Standards.OWASPASVS9.Passed = append(result.Standards.OWASPASVS9.Passed, "9.2.4 - OCSP stapling enabled")
+		result.Recommendations = append(result.Recommendations, "OCSP stapling is enabled - good for privacy and performance")
+	} else {
+		result.Recommendations = append(result.Recommendations, "Consider enabling OCSP stapling to improve certificate revocation checking performance and privacy")
+	}
+
 	// Overall compliance determination
 	result.Compliant = result.Standards.OWASPASVS9.Compliant &&
 		result.Standards.PCIDSS41.Compliant &&

@@ -61,6 +61,21 @@ type TLSComplianceResult struct {
 	Recommendations []string            `json:"recommendations,omitempty"`
 	Standards       ComplianceStandards `json:"standards"`
 	CertificateInfo *CertificateInfo    `json:"certificate_info,omitempty"`
+	MixedContent    *MixedContentCheck  `json:"mixed_content,omitempty"`
+	OCSPStapling    bool                `json:"ocsp_stapling"`
+}
+
+// MixedContentCheck detects mixed content vulnerabilities (HTTP resources on HTTPS pages)
+type MixedContentCheck struct {
+	HasMixedContent    bool     `json:"has_mixed_content"`
+	MixedContentURLs   []string `json:"mixed_content_urls,omitempty"`
+	InsecureScripts    int      `json:"insecure_scripts"`
+	InsecureStyles     int      `json:"insecure_styles"`
+	InsecureImages     int      `json:"insecure_images"`
+	InsecureMedia      int      `json:"insecure_media"`
+	InsecureIframes    int      `json:"insecure_iframes"`
+	Severity           string   `json:"severity"`            // "critical", "high", "medium"
+	Recommendation     string   `json:"recommendation,omitempty"`
 }
 
 // CookieFinding captures insecure cookie configurations (OWASP ASVS §3.4).

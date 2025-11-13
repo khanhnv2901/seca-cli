@@ -143,6 +143,11 @@ func (h *HTTPChecker) Check(ctx context.Context, target string) (result CheckRes
 				}
 			}
 		}
+
+		// Check for OCSP Stapling status
+		if result.TLSCompliance != nil && result.TLSCompliance.OCSPStapling {
+			appendNote(&result, "OCSP stapling enabled")
+		}
 	}
 
 	readLimit := int64(bodySnippetLimit)
