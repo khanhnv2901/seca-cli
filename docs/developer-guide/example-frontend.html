@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SECA API Demo - Security Scanner</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            color: #555;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        input[type="text"],
+        input[type="email"],
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 6px;
+            display: none;
+        }
+
+        .status.show {
+            display: block;
+        }
+
+        .status.loading {
+            background: #e3f2fd;
+            color: #1976d2;
+            border-left: 4px solid #1976d2;
+        }
+
+        .status.success {
+            background: #e8f5e9;
+            color: #388e3c;
+            border-left: 4px solid #388e3c;
+        }
+
+        .status.error {
+            background: #ffebee;
+            color: #c62828;
+            border-left: 4px solid #c62828;
+        }
+
+        .results {
+            margin-top: 20px;
+            display: none;
+        }
+
+        .results.show {
+            display: block;
+        }
+
+        .results h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+
+        .finding {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            border-left: 4px solid #999;
+        }
+
+        .finding.critical {
+            border-left-color: #d32f2f;
+        }
+
+        .finding.high {
+            border-left-color: #f57c00;
+        }
+
+        .finding.medium {
+            border-left-color: #fbc02d;
+        }
+
+        .finding.low {
+            border-left-color: #388e3c;
+        }
+
+        .finding-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .finding-title {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .finding-severity {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .severity-critical {
+            background: #ffcdd2;
+            color: #d32f2f;
+        }
+
+        .severity-high {
+            background: #ffe0b2;
+            color: #f57c00;
+        }
+
+        .severity-medium {
+            background: #fff9c4;
+            color: #f57f17;
+        }
+
+        .severity-low {
+            background: #c8e6c9;
+            color: #388e3c;
+        }
+
+        .finding-description {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .config-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f5f5f5;
+            border-radius: 6px;
+        }
+
+        .config-section h3 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .config-section code {
+            background: #e0e0e0;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #1976d2;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛡️ Security Scanner Demo</h1>
+        <p class="subtitle">Powered by SECA-CLI REST API</p>
+
+        <form id="scanForm">
+            <div class="form-group">
+                <label for="domain">Domain to Scan *</label>
+                <input
+                    type="text"
+                    id="domain"
+                    name="domain"
+                    placeholder="example.com"
+                    required
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="email">Your Email *</label>
+                <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    placeholder="security@company.com"
+                    required
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="roe">Rules of Engagement</label>
+                <textarea
+                    id="roe"
+                    name="roe"
+                    readonly
+                >Demo scan only. Non-invasive security checks. No destructive testing.</textarea>
+            </div>
+
+            <div class="form-group checkbox-group">
+                <input
+                    type="checkbox"
+                    id="roeAgree"
+                    name="roeAgree"
+                    required
+                >
+                <label for="roeAgree">I agree to the Rules of Engagement</label>
+            </div>
+
+            <button type="submit" id="scanButton">
+                Run Security Scan
+            </button>
+        </form>
+
+        <div id="status" class="status"></div>
+        <div id="results" class="results"></div>
+
+        <div class="config-section">
+            <h3>⚙️ Configuration</h3>
+            <p style="color: #666; font-size: 14px; margin-bottom: 10px;">
+                Update the API configuration in the JavaScript code below:
+            </p>
+            <p style="color: #666; font-size: 14px;">
+                • <code>API_BASE_URL</code>: Your SECA API server URL<br>
+                • <code>API_TOKEN</code>: Your authentication token
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // Configuration - Update these values
+        // ============================================
+        const API_BASE_URL = 'http://127.0.0.1:8080/api';
+        const API_TOKEN = 'your-auth-token-here';
+
+        // ============================================
+        // API Client
+        // ============================================
+        async function apiRequest(endpoint, options = {}) {
+            const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+                ...options,
+                headers: {
+                    'X-Auth-Token': API_TOKEN,
+                    'Content-Type': 'application/json',
+                    ...options.headers,
+                },
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'API request failed');
+            }
+
+            return response.json();
+        }
+
+        // ============================================
+        // UI Helpers
+        // ============================================
+        function showStatus(message, type = 'loading') {
+            const statusEl = document.getElementById('status');
+            statusEl.className = `status show ${type}`;
+
+            if (type === 'loading') {
+                statusEl.innerHTML = `<div class="spinner"></div>${message}`;
+            } else {
+                statusEl.textContent = message;
+            }
+        }
+
+        function hideStatus() {
+            const statusEl = document.getElementById('status');
+            statusEl.className = 'status';
+        }
+
+        function showResults(results) {
+            const resultsEl = document.getElementById('results');
+
+            if (!results.findings || results.findings.length === 0) {
+                resultsEl.innerHTML = `
+                    <h2>✅ No Issues Found</h2>
+                    <p style="color: #666;">All security checks passed!</p>
+                `;
+                resultsEl.className = 'results show';
+                return;
+            }
+
+            const findingsHtml = results.findings.map(finding => `
+                <div class="finding ${finding.severity}">
+                    <div class="finding-header">
+                        <span class="finding-title">${finding.title}</span>
+                        <span class="finding-severity severity-${finding.severity}">
+                            ${finding.severity}
+                        </span>
+                    </div>
+                    <p class="finding-description">${finding.description}</p>
+                </div>
+            `).join('');
+
+            resultsEl.innerHTML = `
+                <h2>🔍 Scan Results</h2>
+                ${findingsHtml}
+            `;
+            resultsEl.className = 'results show';
+        }
+
+        function hideResults() {
+            const resultsEl = document.getElementById('results');
+            resultsEl.className = 'results';
+        }
+
+        // ============================================
+        // Scan Workflow
+        // ============================================
+        async function runSecurityScan(domain, email, roe) {
+            try {
+                // Step 1: Create engagement
+                showStatus('Creating security engagement...', 'loading');
+
+                const engagement = await apiRequest('/engagements', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        name: `Demo Scan - ${domain}`,
+                        owner: email,
+                        roe: roe,
+                        roe_agree: true,
+                        scope: [`https://${domain}`]
+                    })
+                });
+
+                console.log('Created engagement:', engagement.id);
+
+                // Step 2: Start scan job
+                showStatus('Starting security scan...', 'loading');
+
+                const job = await apiRequest('/jobs', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        type: 'http',
+                        engagement_id: engagement.id
+                    })
+                });
+
+                console.log('Started job:', job.id);
+
+                // Step 3: Poll for completion
+                showStatus('Running security checks... (this may take up to 90 seconds)', 'loading');
+
+                const completedJob = await pollJobStatus(job.id);
+
+                if (completedJob.status === 'error') {
+                    throw new Error(completedJob.error || 'Scan failed');
+                }
+
+                // Step 4: Fetch results
+                showStatus('Fetching scan results...', 'loading');
+
+                const results = await apiRequest(`/results/${engagement.id}`);
+
+                // Step 5: Display results
+                showStatus('Scan completed successfully!', 'success');
+                showResults(results);
+
+            } catch (error) {
+                console.error('Scan error:', error);
+                showStatus(`Error: ${error.message}`, 'error');
+                hideResults();
+            }
+        }
+
+        async function pollJobStatus(jobId, maxAttempts = 45) {
+            for (let i = 0; i < maxAttempts; i++) {
+                const job = await apiRequest(`/jobs/${jobId}`);
+
+                console.log(`Job status: ${job.status}`, job);
+
+                if (job.status === 'done' || job.status === 'error') {
+                    return job;
+                }
+
+                // Wait 2 seconds before next poll
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+
+            throw new Error('Scan timeout - job did not complete in time');
+        }
+
+        // ============================================
+        // Form Handler
+        // ============================================
+        document.getElementById('scanForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const domain = document.getElementById('domain').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const roe = document.getElementById('roe').value;
+            const button = document.getElementById('scanButton');
+
+            // Basic validation
+            if (!domain || !email) {
+                showStatus('Please fill in all required fields', 'error');
+                return;
+            }
+
+            // Disable button during scan
+            button.disabled = true;
+            hideResults();
+
+            try {
+                await runSecurityScan(domain, email, roe);
+            } finally {
+                button.disabled = false;
+            }
+        });
+
+        // ============================================
+        // Health Check on Load
+        // ============================================
+        window.addEventListener('load', async () => {
+            try {
+                const health = await apiRequest('/health');
+                console.log('API server is healthy:', health);
+            } catch (error) {
+                console.error('API server health check failed:', error);
+                showStatus(
+                    'Warning: Cannot connect to API server. Please check configuration.',
+                    'error'
+                );
+            }
+        });
+    </script>
+</body>
+</html>

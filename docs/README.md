@@ -32,6 +32,8 @@ In-depth technical information for developers and system administrators.
 Documentation for extending and customizing SECA-CLI.
 
 - **[Plugin Development Guide](developer-guide/plugin-development.md)** - Create custom security checkers
+- **[API Service Guide](developer-guide/api-guide.md)** - Run SECA as a REST API service (backend)
+- **[Frontend Integration Guide](developer-guide/frontend-integration-guide.md)** - Integrate SECA API with web UIs (frontend)
 
 ### 📚 Reference
 
@@ -88,9 +90,14 @@ For new users, start here:
 
 #### 👨‍💻 Developers
 - [Plugin Development Guide](developer-guide/plugin-development.md)
+- [API Service Guide](developer-guide/api-guide.md)
 - [Testing Guide](technical/testing.md)
 - [Version Management Guide](technical/version-management.md)
 - [Template Approaches](reference/template-approaches.md)
+
+#### 🎨 Frontend Developers
+- [Frontend Integration Guide](developer-guide/frontend-integration-guide.md)
+- [API Service Guide](developer-guide/api-guide.md)
 
 #### 🏢 System Administrators
 - [Installation Guide](user-guide/installation.md)
@@ -121,7 +128,9 @@ docs/
 │   └── version-management.md   Build and release management
 │
 ├── developer-guide/
-│   └── plugin-development.md   Plugin creation and API
+│   ├── plugin-development.md        Plugin creation and API
+│   ├── api-guide.md                 REST API service (backend)
+│   └── frontend-integration-guide.md Frontend integration (web UI)
 │
 └── reference/
     ├── command-reference.md    Complete command and flag reference
