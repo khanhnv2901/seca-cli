@@ -10,22 +10,23 @@ import (
 
 // CheckResult represents the result of a single target check
 type CheckResult struct {
-	Target            string                 `json:"target"`
-	CheckedAt         time.Time              `json:"checked_at"`
-	Status            string                 `json:"status"`
-	HTTPStatus        int                    `json:"http_status,omitempty"`
-	ServerHeader      string                 `json:"server_header,omitempty"`
-	TLSExpiry         string                 `json:"tls_expiry,omitempty"`
-	DNSRecords        map[string]interface{} `json:"dns_records,omitempty"`
-	ResponseTime      float64                `json:"response_time_ms,omitempty"`
-	SecurityHeaders   *SecurityHeadersResult `json:"security_headers,omitempty"`
-	TLSCompliance     *TLSComplianceResult   `json:"tls_compliance,omitempty"`
-	CookieFindings    []CookieFinding        `json:"cookie_findings,omitempty"`
-	CORSInsights      *CORSReport            `json:"cors,omitempty"`
-	CachePolicy       *CachePolicy           `json:"cache_policy,omitempty"`
-	ThirdPartyScripts []string               `json:"third_party_scripts,omitempty"`
-	Notes             string                 `json:"notes,omitempty"`
-	Error             string                 `json:"error,omitempty"`
+	Target            string                  `json:"target"`
+	CheckedAt         time.Time               `json:"checked_at"`
+	Status            string                  `json:"status"`
+	HTTPStatus        int                     `json:"http_status,omitempty"`
+	ServerHeader      string                  `json:"server_header,omitempty"`
+	TLSExpiry         string                  `json:"tls_expiry,omitempty"`
+	DNSRecords        map[string]interface{}  `json:"dns_records,omitempty"`
+	ResponseTime      float64                 `json:"response_time_ms,omitempty"`
+	SecurityHeaders   *SecurityHeadersResult  `json:"security_headers,omitempty"`
+	TLSCompliance     *TLSComplianceResult    `json:"tls_compliance,omitempty"`
+	CookieFindings    []CookieFinding         `json:"cookie_findings,omitempty"`
+	CORSInsights      *CORSReport             `json:"cors,omitempty"`
+	CachePolicy       *CachePolicy            `json:"cache_policy,omitempty"`
+	NetworkSecurity   *NetworkSecurityResult  `json:"network_security,omitempty"`
+	ThirdPartyScripts []string                `json:"third_party_scripts,omitempty"`
+	Notes             string                  `json:"notes,omitempty"`
+	Error             string                  `json:"error,omitempty"`
 }
 
 // SecurityHeadersResult contains security headers analysis
