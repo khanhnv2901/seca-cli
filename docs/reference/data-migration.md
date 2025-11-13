@@ -13,7 +13,7 @@ As of version 0.2.0, SECA-CLI now stores user data in OS-appropriate data direct
 └── results/
     └── <engagement-id>/
         ├── audit.csv
-        ├── results.json
+        ├── http_results.json
         └── ...
 ```
 
@@ -24,7 +24,7 @@ As of version 0.2.0, SECA-CLI now stores user data in OS-appropriate data direct
 └── results/
     └── <engagement-id>/
         ├── audit.csv
-        ├── results.json
+        ├── http_results.json
         └── ...
 ```
 
@@ -35,7 +35,7 @@ As of version 0.2.0, SECA-CLI now stores user data in OS-appropriate data direct
 └── results\
     └── <engagement-id>\
         ├── audit.csv
-        ├── results.json
+        ├── http_results.json
         └── ...
 ```
 

@@ -33,7 +33,7 @@ type RunMetadata struct {
 	HashAlgorithm        string    `json:"hash_algorithm,omitempty"`
 	SignatureFingerprint string    `json:"signature_fingerprint,omitempty"`
 	TotalTargets         int       `json:"total_targets"`
-	// Note: results.json hash is stored in results.json.<hash> file, not here
+	// Note: http_results.json hash is stored in http_results.json.<hash> file, not here
 }
 
 type RunOutput struct {
@@ -78,9 +78,9 @@ var checkHTTPCmd = &cobra.Command{
 					)
 				}
 			},
-			ResultsFilename:        "results.json",
+			ResultsFilename:        "http_results.json",
 			TimeoutSecs:            cliConfig.Check.TimeoutSecs,
-			VerificationCmdBuilder: makeVerificationCommand("results.json"),
+			VerificationCmdBuilder: makeVerificationCommand("http_results.json"),
 			SupportsRawCapture:     true,
 			PrintSummary: func(results []checker.CheckResult, resultsPath, auditPath, auditHash, resultsHash string, hashAlgo HashAlgorithm) {
 				fmt.Println(colorSuccess("Run complete."))
@@ -253,7 +253,7 @@ type checkConfig struct {
 	// Audit function creation
 	CreateAuditFn func(appCtx *AppContext, params checkParams, chk checker.Checker) func(string, checker.CheckResult, float64) error
 
-	// Results filename (e.g., "results.json" or "dns_results.json")
+	// Results filename (e.g., "http_results.json" or "dns_results.json")
 	ResultsFilename string
 
 	// Timeout in seconds for the runner
@@ -727,7 +727,7 @@ func writeResultsAndHash(appCtx *AppContext, id string, resultsFilename string, 
 		return "", "", "", "", fmt.Errorf("failed to write final results: %w", err)
 	}
 
-	// Hash results.json AFTER final write
+	// Hash http_results.json AFTER final write
 	resultsHash, err = HashFile(resultsPath, hashAlgo)
 	if err != nil {
 		return "", "", "", "", fmt.Errorf("failed to hash results file: %w", err)

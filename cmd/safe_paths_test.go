@@ -24,7 +24,7 @@ func TestValidateEngagementID(t *testing.T) {
 
 func TestResolveAndEnsureResultsPath(t *testing.T) {
 	base := t.TempDir()
-	path, err := resolveResultsPath(base, "eng123", "results.json")
+	path, err := resolveResultsPath(base, "eng123", "http_results.json")
 	if err != nil {
 		t.Fatalf("resolveResultsPath failed: %v", err)
 	}

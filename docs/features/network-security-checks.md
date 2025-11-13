@@ -286,18 +286,18 @@ jobs:
             --ports 22,80,443,3306,3389
 
           RESULTS="$HOME/.local/share/seca-cli/results/$ENGAGEMENT_ID/network_results.json"
-          cp "$RESULTS" results.json
+          cp "$RESULTS" http_results.json
 
       - name: Check for vulnerabilities
         run: |
-          if jq -e '.network_security.subdomain_takeover.vulnerable == true' results.json; then
+          if jq -e '.network_security.subdomain_takeover.vulnerable == true' http_results.json; then
             echo "::error::Subdomain takeover vulnerability detected!"
             exit 1
           fi
 
-          if jq -e '.network_security.issues | length > 0' results.json; then
+          if jq -e '.network_security.issues | length > 0' http_results.json; then
             echo "::warning::Network security issues found"
-            jq '.network_security.issues' results.json
+            jq '.network_security.issues' http_results.json
           fi
 ```
 

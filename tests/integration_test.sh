@@ -180,10 +180,10 @@ else
     exit 1
 fi
 
-if [ -f "$RESULTS_DIR/results.json" ]; then
-    echo -e "${GREEN}✓ results.json exists${NC}"
+if [ -f "$RESULTS_DIR/http_results.json" ]; then
+    echo -e "${GREEN}✓ http_results.json exists${NC}"
 else
-    echo -e "${RED}✗ results.json not found${NC}"
+    echo -e "${RED}✗ http_results.json not found${NC}"
     exit 1
 fi
 
@@ -194,10 +194,10 @@ else
     exit 1
 fi
 
-if [ -f "$RESULTS_DIR/results.json.sha256" ]; then
-    echo -e "${GREEN}✓ results.json.sha256 exists${NC}"
+if [ -f "$RESULTS_DIR/http_results.json.sha256" ]; then
+    echo -e "${GREEN}✓ http_results.json.sha256 exists${NC}"
 else
-    echo -e "${RED}✗ results.json.sha256 not found${NC}"
+    echo -e "${RED}✗ http_results.json.sha256 not found${NC}"
     exit 1
 fi
 echo ""
@@ -213,10 +213,10 @@ else
     exit 1
 fi
 
-if sha256sum -c results.json.sha256 > /dev/null 2>&1; then
-    echo -e "${GREEN}✓ results.json hash verified${NC}"
+if sha256sum -c http_results.json.sha256 > /dev/null 2>&1; then
+    echo -e "${GREEN}✓ http_results.json hash verified${NC}"
 else
-    echo -e "${RED}✗ results.json hash verification failed${NC}"
+    echo -e "${RED}✗ http_results.json hash verification failed${NC}"
     cd - > /dev/null
     exit 1
 fi
@@ -247,7 +247,7 @@ echo ""
 
 # Test 11: Verify results JSON format
 echo -e "${YELLOW}Test 11: Verifying results JSON format...${NC}"
-RESULTS_JSON="$RESULTS_DIR/results.json"
+RESULTS_JSON="$RESULTS_DIR/http_results.json"
 
 if jq -e '.metadata.operator' "$RESULTS_JSON" > /dev/null 2>&1; then
     echo -e "${GREEN}✓ Results JSON has metadata.operator${NC}"

@@ -63,7 +63,7 @@ SECA-CLI stores user data in OS-appropriate data directories following platform 
 └── results/
     └── <engagement-id>/
         ├── audit.csv
-        ├── results.json
+        ├── http_results.json
         └── raw_*.txt
 ```
 
@@ -74,7 +74,7 @@ SECA-CLI stores user data in OS-appropriate data directories following platform 
 └── results/
     └── <engagement-id>/
         ├── audit.csv
-        ├── results.json
+        ├── http_results.json
         └── raw_*.txt
 ```
 
@@ -85,7 +85,7 @@ SECA-CLI stores user data in OS-appropriate data directories following platform 
 └── results\
     └── <engagement-id>\
         ├── audit.csv
-        ├── results.json
+        ├── http_results.json
         └── raw_*.txt
 ```
 
@@ -301,8 +301,8 @@ All evidence is stored in the OS-specific data directory under `results/<engagem
 results/1762627948156627663/
 ├── audit.csv              # CSV audit log
 ├── audit.csv.sha256       # SHA256 hash
-├── results.json           # JSON results with metadata
-├── results.json.sha256    # SHA256 hash
+├── http_results.json           # JSON results with metadata
+├── http_results.json.sha256    # SHA256 hash
 └── raw_*.txt              # Raw captures (if --audit-append-raw used)
 ```
 
@@ -365,7 +365,7 @@ Manual verification:
 ```bash
 cd results/1762627948156627663/
 sha256sum -c audit.csv.sha256
-sha256sum -c results.json.sha256
+sha256sum -c http_results.json.sha256
 ```
 
 ### Sign Evidence with GPG
@@ -911,8 +911,8 @@ seca-cli/
     └── <engagement-id>/
         ├── audit.csv
         ├── audit.csv.sha256
-        ├── results.json
-        ├── results.json.sha256
+        ├── http_results.json
+        ├── http_results.json.sha256
         └── raw_*.txt
 ```
 

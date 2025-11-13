@@ -46,8 +46,8 @@ After running a check, SECA-CLI generates the following evidence in `results/<en
 results/<engagement-id>/
 ├── audit.csv              # CSV audit log with all HTTP checks
 ├── audit.csv.sha256       # SHA256 hash of audit.csv
-├── results.json           # JSON results with metadata
-├── results.json.sha256    # SHA256 hash of results.json
+├── http_results.json           # JSON results with metadata
+├── http_results.json.sha256    # SHA256 hash of http_results.json
 └── raw_*.txt              # Optional: raw HTTP captures (if --audit-append-raw used)
 ```
 
@@ -68,12 +68,12 @@ audit.csv: OK
 ### 2. Verify Results File Integrity
 
 ```bash
-sha256sum -c results.json.sha256
+sha256sum -c http_results.json.sha256
 ```
 
 Expected output:
 ```
-results.json: OK
+http_results.json: OK
 ```
 
 ### 3. Verify Both Files at Once
@@ -107,11 +107,11 @@ cd results/<engagement-id>/
 gpg --detach-sign --armor audit.csv
 
 # Sign results file
-gpg --detach-sign --armor results.json
+gpg --detach-sign --armor http_results.json
 
 # This creates:
 # - audit.csv.asc
-# - results.json.asc
+# - http_results.json.asc
 ```
 
 ### Verify Signatures
@@ -121,7 +121,7 @@ gpg --detach-sign --armor results.json
 gpg --verify audit.csv.asc audit.csv
 
 # Verify results signature
-gpg --verify results.json.asc results.json
+gpg --verify http_results.json.asc http_results.json
 ```
 
 ## Retention Requirements
@@ -137,7 +137,7 @@ When using `--audit-append-raw`, raw HTTP response data is captured. This data m
 
 ### Retention Best Practices
 
-1. **Standard Audit Files** (audit.csv, results.json)
+1. **Standard Audit Files** (audit.csv, http_results.json)
    - Retain for the duration of the engagement + statutory period
    - Typically: 3-7 years depending on jurisdiction and contract
    - Keep SHA256 hashes and signatures with the files

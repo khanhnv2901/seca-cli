@@ -30,7 +30,7 @@ const (
 var reportTemplateFS embed.FS
 
 var preferredResultFilenames = []string{
-	"results.json",
+	"http_results.json",
 	"network_results.json",
 	"dns_results.json",
 }
@@ -202,7 +202,7 @@ func discoverResultFiles(resultsDir, engagementID string) ([]string, error) {
 			continue
 		}
 		name := entry.Name()
-		if strings.EqualFold(name, "results.json") || strings.HasSuffix(name, "_results.json") {
+		if strings.EqualFold(name, "http_results.json") || strings.HasSuffix(name, "_results.json") {
 			available[name] = struct{}{}
 		}
 	}
@@ -817,7 +817,7 @@ var reportStatsCmd = &cobra.Command{
 			format = "text"
 		}
 
-		path, err := resolveResultsPath(appCtx.ResultsDir, id, "results.json")
+		path, err := resolveResultsPath(appCtx.ResultsDir, id, "http_results.json")
 		if err != nil {
 			return fmt.Errorf("resolve results path: %w", err)
 		}

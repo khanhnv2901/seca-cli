@@ -331,7 +331,7 @@ func TestReportGeneration(t *testing.T) {
 
     // Create test data
     testData := []byte(`{"results": [{"status": "ok"}]}`)
-    env.CreateFile("results/test-engagement/results.json", testData)
+    env.CreateFile("results/test-engagement/http_results.json", testData)
 
     // Generate report
     err := GenerateReport(env.EngagementID, env.AppCtx.ResultsDir)

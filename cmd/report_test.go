@@ -293,7 +293,7 @@ func TestLoadAggregatedRunOutput(t *testing.T) {
 	networkStart := time.Date(2025, 1, 2, 9, 0, 0, 0, time.UTC)
 	networkComplete := networkStart.Add(3 * time.Minute)
 
-	writeRunOutputFile(t, resultsDir, engagementID, "results.json", RunOutput{
+	writeRunOutputFile(t, resultsDir, engagementID, "http_results.json", RunOutput{
 		Metadata: RunMetadata{
 			EngagementID: engagementID,
 			StartAt:      httpStart,
@@ -330,7 +330,7 @@ func TestLoadAggregatedRunOutput(t *testing.T) {
 	if output.Results[0].Target != "https://app.example.com" {
 		t.Fatalf("expected first target from HTTP results, got %s", output.Results[0].Target)
 	}
-	if len(sources) != 2 || sources[0] != "results.json" || sources[1] != "network_results.json" {
+	if len(sources) != 2 || sources[0] != "http_results.json" || sources[1] != "network_results.json" {
 		t.Fatalf("unexpected sources: %v", sources)
 	}
 }

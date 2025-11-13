@@ -37,7 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Secure Results Encryption**: GPG encryption for audit logs and results
   - `--secure-results` flag to encrypt evidence
-  - Automatic GPG encryption of audit.csv and results.json
+  - Automatic GPG encryption of audit.csv and http_results.json
   - Supports custom GPG recipients
   - Meets encryption-at-rest compliance requirements
 

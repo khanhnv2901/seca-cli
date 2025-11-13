@@ -290,10 +290,10 @@ func TestAutoSign_SignFileFunction(t *testing.T) {
 }
 
 func TestAutoSign_BothHashFilesAreSigned(t *testing.T) {
-	// Test that both audit.csv.sha256 and results.json.sha256 are signed
+	// Test that both audit.csv.sha256 and http_results.json.sha256 are signed
 	filesToSign := []string{
 		"audit.csv.sha256",
-		"results.json.sha256",
+		"http_results.json.sha256",
 	}
 
 	if len(filesToSign) != 2 {
@@ -302,8 +302,8 @@ func TestAutoSign_BothHashFilesAreSigned(t *testing.T) {
 
 	// Verify both expected files are in the list
 	expectedFiles := map[string]bool{
-		"audit.csv.sha256":    false,
-		"results.json.sha256": false,
+		"audit.csv.sha256":         false,
+		"http_results.json.sha256": false,
 	}
 
 	for _, file := range filesToSign {

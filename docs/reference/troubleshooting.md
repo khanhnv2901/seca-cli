@@ -542,7 +542,7 @@ seca check http --id eng123 --roe-confirm example.com
 
 1. **Verify recipient:**
    ```bash
-   gpg --list-packets results.json.gpg
+   gpg --list-packets http_results.json.gpg
    # Check recipient key ID
    ```
 

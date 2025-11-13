@@ -181,7 +181,7 @@ type resultsAPIService struct {
 }
 
 func (s *resultsAPIService) GetResults(ctx context.Context, id string) ([]byte, error) {
-	path, err := resolveResultsPath(s.appCtx.ResultsDir, id, "results.json")
+	path, err := resolveResultsPath(s.appCtx.ResultsDir, id, "http_results.json")
 	if err != nil {
 		return nil, err
 	}

@@ -149,7 +149,7 @@ Every action is logged in `audit.csv` with:
 
 All evidence files include SHA256 hashes:
 - `audit.csv.sha256`
-- `results.json.sha256`
+- `http_results.json.sha256`
 
 Verification ensures files haven't been tampered with.
 
@@ -285,8 +285,8 @@ ls -la results/$ENGAGEMENT_ID/
 ```
 audit.csv
 audit.csv.sha256
-results.json
-results.json.sha256
+http_results.json
+http_results.json.sha256
 ```
 
 **Step 2: Verify Hashes**
@@ -294,13 +294,13 @@ results.json.sha256
 ```bash
 cd results/$ENGAGEMENT_ID/
 sha256sum -c audit.csv.sha256
-sha256sum -c results.json.sha256
+sha256sum -c http_results.json.sha256
 ```
 
 **Expected output:**
 ```
 audit.csv: OK
-results.json: OK
+http_results.json: OK
 ```
 
 **Step 3: Review Audit Log**

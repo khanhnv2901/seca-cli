@@ -64,10 +64,10 @@ sign: ## Sign audit and results files with GPG for a specific engagement
 	@echo "$(YELLOW)Signing evidence files for engagement $(ENGAGEMENT_ID)...$(NC)"
 	@cd $(RESULTS_DIR)/$(ENGAGEMENT_ID) && \
 		gpg --detach-sign --armor audit.csv && \
-		gpg --detach-sign --armor results.json && \
+		gpg --detach-sign --armor http_results.json && \
 		echo "$(GREEN)✓ Files signed successfully$(NC)" && \
 		echo "  - audit.csv.asc" && \
-		echo "  - results.json.asc"
+		echo "  - http_results.json.asc"
 
 sign-all: ## Sign audit and results files for all engagements
 	@echo "$(YELLOW)Signing all engagements...$(NC)"
@@ -77,7 +77,7 @@ sign-all: ## Sign audit and results files for all engagements
 			echo "Signing $$eng_id..."; \
 			cd "$$dir" && \
 			gpg --detach-sign --armor audit.csv 2>/dev/null && \
-			gpg --detach-sign --armor results.json 2>/dev/null && \
+			gpg --detach-sign --armor http_results.json 2>/dev/null && \
 			cd - > /dev/null; \
 		fi \
 	done
@@ -92,7 +92,7 @@ verify-signature: ## Verify GPG signatures for a specific engagement
 	@echo "$(YELLOW)Verifying GPG signatures for engagement $(ENGAGEMENT_ID)...$(NC)"
 	@cd $(RESULTS_DIR)/$(ENGAGEMENT_ID) && \
 		gpg --verify audit.csv.asc audit.csv && \
-		gpg --verify results.json.asc results.json && \
+		gpg --verify http_results.json.asc http_results.json && \
 		echo "$(GREEN)✓ Signatures verified successfully$(NC)"
 
 purge-raw: ## Delete raw captures older than RETENTION_DAYS for a specific engagement
@@ -167,7 +167,7 @@ show-stats: ## Show statistics for a specific engagement
 			audit_lines=$$(wc -l < "$$dir/audit.csv"); \
 			echo "  Audit entries: $$((audit_lines - 1))"; \
 		fi; \
-		if [ -f "$$dir/results.json" ]; then \
+		if [ -f "$$dir/http_results.json" ]; then \
 			echo "  Results file: ✓"; \
 		fi; \
 		raw_count=$$(find "$$dir" -name "raw_*.txt" 2>/dev/null | wc -l); \

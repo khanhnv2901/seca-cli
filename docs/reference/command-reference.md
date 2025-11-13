@@ -664,7 +664,7 @@ Generate a summary report for an engagement.
 seca report generate --id <id> [flags]
 ```
 
-The report command automatically aggregates findings from every standard result file in the engagement directory (`results.json`, `network_results.json`, `dns_results.json`) so that HTTP, network, and DNS checks appear in a single document.
+The report command automatically aggregates findings from every standard result file in the engagement directory (`http_results.json`, `network_results.json`, `dns_results.json`) so that HTTP, network, and DNS checks appear in a single document.
 
 **Required Flags:**
 

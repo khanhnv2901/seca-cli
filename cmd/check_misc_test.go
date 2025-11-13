@@ -3,9 +3,9 @@ package cmd
 import "testing"
 
 func TestMakeVerificationCommand(t *testing.T) {
-	builder := makeVerificationCommand("results.json")
+	builder := makeVerificationCommand("http_results.json")
 	cmd := builder(HashAlgorithmSHA512)
-	expected := "sha512sum -c audit.csv.sha512 && sha512sum -c results.json.sha512"
+	expected := "sha512sum -c audit.csv.sha512 && sha512sum -c http_results.json.sha512"
 	if cmd != expected {
 		t.Fatalf("expected %s, got %s", expected, cmd)
 	}

@@ -265,7 +265,7 @@ seca check http --id eng123 --secure-results host1.com host2.com
 
 ```bash
 # Decrypt results file
-gpg --decrypt ~/.local/share/seca-cli/results/eng123/http_results.json.gpg > results.json
+gpg --decrypt ~/.local/share/seca-cli/results/eng123/http_results.json.gpg > http_results.json
 
 # Decrypt audit log
 gpg --decrypt ~/.local/share/seca-cli/results/eng123/audit.csv.gpg > audit.csv

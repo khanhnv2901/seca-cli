@@ -3,710 +3,509 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Engagement Report: {{.Metadata.EngagementName}}</title>
+    <title>Security Scan Report - {{.ScanURL}}</title>
     <style>
-body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    line-height: 1.6;
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 20px;
-    background-color: #f5f5f5;
-    color: #333;
-}
-.container {
-    background-color: white;
-    padding: 30px;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-h1 {
-    color: #2c3e50;
-    border-bottom: 3px solid #3498db;
-    padding-bottom: 10px;
-}
-h2 {
-    color: #34495e;
-    margin-top: 30px;
-    border-left: 4px solid #3498db;
-    padding-left: 10px;
-}
-h3 {
-    color: #2c3e50;
-    margin-top: 25px;
-    border-bottom: 2px solid #ecf0f1;
-    padding-bottom: 8px;
-}
-h4 {
-    color: #34495e;
-    margin-top: 20px;
-    margin-bottom: 10px;
-}
-.metadata {
-    background-color: #ecf0f1;
-    padding: 15px;
-    border-radius: 5px;
-    margin: 20px 0;
-}
-.metadata-item {
-    margin: 8px 0;
-}
-.metadata-label {
-    font-weight: bold;
-    color: #2c3e50;
-}
-.summary {
-    display: flex;
-    gap: 20px;
-    margin: 20px 0;
-}
-.summary-card {
-    flex: 1;
-    padding: 20px;
-    border-radius: 5px;
-    text-align: center;
-}
-.success-card {
-    background-color: #d4edda;
-    border: 1px solid #c3e6cb;
-}
-.error-card {
-    background-color: #f8d7da;
-    border: 1px solid #f5c6cb;
-}
-.rate-card {
-    background-color: #d1ecf1;
-    border: 1px solid #bee5eb;
-}
-.summary-number {
-    font-size: 2em;
-    font-weight: bold;
-    margin: 10px 0;
-}
-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 20px 0;
-}
-th {
-    background-color: #3498db;
-    color: white;
-    padding: 12px;
-    text-align: left;
-    font-weight: 600;
-}
-td {
-    padding: 10px 12px;
-    border-bottom: 1px solid #ddd;
-}
-tr:hover {
-    background-color: #f5f5f5;
-}
-.status-ok {
-    color: #28a745;
-    font-weight: bold;
-}
-.status-error {
-    color: #dc3545;
-    font-weight: bold;
-}
-.code {
-    font-family: 'Courier New', monospace;
-    background-color: #f4f4f4;
-    padding: 2px 6px;
-    border-radius: 3px;
-    font-size: 0.9em;
-}
-.footer {
-    margin-top: 40px;
-    padding-top: 20px;
-    border-top: 1px solid #ddd;
-    text-align: center;
-    color: #7f8c8d;
-    font-size: 0.9em;
-}
-.target-detail {
-    margin: 30px 0;
-    padding: 20px;
-    background-color: #f8f9fa;
-    border-radius: 5px;
-    border-left: 4px solid #3498db;
-}
-.section {
-    margin: 20px 0;
-    padding: 15px;
-    background-color: white;
-    border-radius: 5px;
-    border: 1px solid #e0e0e0;
-}
-.grade-badge {
-    display: inline-block;
-    padding: 5px 15px;
-    border-radius: 20px;
-    font-weight: bold;
-    font-size: 1.2em;
-}
-.grade-A { background-color: #28a745; color: white; }
-.grade-B { background-color: #5cb85c; color: white; }
-.grade-C { background-color: #ffc107; color: #333; }
-.grade-D { background-color: #ff851b; color: white; }
-.grade-F { background-color: #dc3545; color: white; }
-.compliant-yes {
-    color: #28a745;
-    font-weight: bold;
-}
-.compliant-no {
-    color: #dc3545;
-    font-weight: bold;
-}
-.header-present {
-    color: #28a745;
-}
-.header-missing {
-    color: #dc3545;
-}
-.info-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 10px;
-    margin: 15px 0;
-}
-.info-item {
-    padding: 8px;
-    background-color: #f8f9fa;
-    border-radius: 3px;
-}
-.info-label {
-    font-weight: 600;
-    color: #495057;
-}
-.warning {
-    background-color: #fff3cd;
-    border-left: 4px solid #ffc107;
-    padding: 10px 15px;
-    margin: 10px 0;
-    border-radius: 3px;
-}
-.network-issues {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin: 10px 0;
-}
-.badge {
-    display: inline-block;
-    padding: 4px 10px;
-    border-radius: 12px;
-    font-size: 0.85em;
-    font-weight: 600;
-}
-.badge-critical { background-color: #dc3545; color: #fff; }
-.badge-high { background-color: #fd7e14; color: #fff; }
-.badge-medium { background-color: #ffc107; color: #343a40; }
-.badge-low { background-color: #28a745; color: #fff; }
-.badge-info { background-color: #17a2b8; color: #fff; }
-.ports-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 10px;
-}
-.ports-table th,
-.ports-table td {
-    border: 1px solid #e0e0e0;
-    padding: 8px;
-}
-.recommendation {
-    background-color: #d1ecf1;
-    border-left: 4px solid #17a2b8;
-    padding: 10px 15px;
-    margin: 10px 0;
-    border-radius: 3px;
-}
-.trend-chart {
-    display: flex;
-    align-items: flex-end;
-    gap: 12px;
-    height: 200px;
-    margin: 20px 0 40px 0;
-}
-.trend-bar {
-    flex: 1;
-    min-width: 40px;
-    background-color: #3498db;
-    border-radius: 4px 4px 0 0;
-    position: relative;
-}
-.trend-value {
-    position: absolute;
-    top: -24px;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 0.8em;
-    font-weight: bold;
-}
-.trend-label {
-    position: absolute;
-    bottom: -35px;
-    left: -20px;
-    width: 80px;
-    transform: rotate(-45deg);
-    font-size: 0.75em;
-    color: #555;
-}
-ul {
-    margin: 10px 0;
-    padding-left: 25px;
-}
-li {
-    margin: 5px 0;
-}
-.cert-chain {
-    background-color: #f8f9fa;
-    padding: 10px;
-    border-radius: 3px;
-    margin: 10px 0;
-}
-.cert-chain-item {
-    padding: 5px 10px;
-    margin: 3px 0;
-    background-color: white;
-    border-left: 3px solid #3498db;
-}
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f5f5f7;
+            color: #1d1d1f;
+            line-height: 1.6;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        h1 {
+            font-size: 32px;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 30px;
+        }
+
+        h2 {
+            font-size: 24px;
+            font-weight: 600;
+            color: #34495e;
+            margin: 30px 0 20px 0;
+        }
+
+        .scan-header {
+            background: #f8f9fa;
+            padding: 24px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .scan-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .scan-info label {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #6c757d;
+            margin-bottom: 4px;
+            letter-spacing: 0.5px;
+        }
+
+        .scan-info value {
+            font-size: 16px;
+            color: #212529;
+            font-weight: 500;
+        }
+
+        .status-completed {
+            color: #28a745;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-completed::before {
+            content: '✓';
+            background: #28a745;
+            color: white;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .vulnerabilities-summary {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 16px;
+            margin-bottom: 30px;
+            border-radius: 4px;
+        }
+
+        .vulnerabilities-summary strong {
+            color: #856404;
+            font-size: 16px;
+        }
+
+        .findings-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            margin: 20px 0;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .findings-table thead {
+            background: #f8f9fa;
+        }
+
+        .findings-table th {
+            padding: 14px 16px;
+            text-align: left;
+            font-size: 13px;
+            font-weight: 600;
+            color: #495057;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        .findings-table td {
+            padding: 16px;
+            border-bottom: 1px solid #e9ecef;
+            vertical-align: middle;
+        }
+
+        .findings-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .findings-table tbody tr {
+            transition: background-color 0.2s;
+            cursor: pointer;
+        }
+
+        .findings-table tbody tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        .severity-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: inline-block;
+        }
+
+        .severity-critical {
+            background: #dc3545;
+            color: white;
+        }
+
+        .severity-high {
+            background: #fd7e14;
+            color: white;
+        }
+
+        .severity-medium {
+            background: #ffc107;
+            color: #856404;
+        }
+
+        .severity-low {
+            background: #17a2b8;
+            color: white;
+        }
+
+        .severity-info {
+            background: #6c757d;
+            color: white;
+        }
+
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: inline-block;
+        }
+
+        .status-failed {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status-failed::before {
+            content: '× ';
+            font-weight: bold;
+        }
+
+        .status-passed {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-passed::before {
+            content: '✓ ';
+            font-weight: bold;
+        }
+
+        .status-warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-warning::before {
+            content: '⚠ ';
+            font-weight: bold;
+        }
+
+        .status-info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .status-info::before {
+            content: 'ℹ ';
+            font-weight: bold;
+        }
+
+        .vulnerability-details {
+            display: none;
+            background: #f8f9fa;
+            border-left: 4px solid #dee2e6;
+            padding: 20px;
+            margin: 16px 0;
+        }
+
+        .vulnerability-details.active {
+            display: block;
+        }
+
+        .details-section {
+            margin-bottom: 24px;
+        }
+
+        .details-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .details-section h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #2c3e50;
+        }
+
+        .details-section p, .details-section pre {
+            color: #495057;
+            line-height: 1.8;
+            margin-bottom: 8px;
+        }
+
+        .details-section ul, .details-section ol {
+            margin-left: 20px;
+            color: #495057;
+            line-height: 1.8;
+        }
+
+        .details-section li {
+            margin-bottom: 8px;
+        }
+
+        .code-example {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 16px;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            overflow-x: auto;
+            margin: 12px 0;
+        }
+
+        .cvss-score {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: #e7f3ff;
+            border-radius: 6px;
+            margin: 12px 0;
+        }
+
+        .cvss-score strong {
+            color: #0366d6;
+        }
+
+        .affected-urls {
+            background: white;
+            border: 1px solid #e1e4e8;
+            border-radius: 6px;
+            padding: 12px;
+            margin: 12px 0;
+        }
+
+        .affected-urls strong {
+            display: block;
+            margin-bottom: 8px;
+            color: #24292e;
+        }
+
+        .affected-urls div {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+            color: #586069;
+            padding: 4px 0;
+        }
+
+        .toggle-icon {
+            float: right;
+            color: #6c757d;
+            font-size: 18px;
+            transition: transform 0.3s;
+        }
+
+        .vulnerability-row.active .toggle-icon {
+            transform: rotate(180deg);
+        }
+
+        .recommendation-note {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 16px;
+            margin: 16px 0;
+            border-radius: 4px;
+        }
+
+        .recommendation-note h4 {
+            color: #856404;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .recommendation-note p {
+            color: #856404;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        @media print {
+            body {
+                background: white;
+            }
+
+            .container {
+                box-shadow: none;
+            }
+
+            .vulnerability-details {
+                display: block !important;
+            }
+
+            .toggle-icon {
+                display: none;
+            }
+        }
     </style>
 </head>
 <body>
-<div class="container">
-    <h1>Engagement Report: {{.Metadata.EngagementName}}</h1>
-    <p><strong>Generated:</strong> {{.GeneratedAt}}</p>
+    <div class="container">
+        <h1>Scan Results</h1>
 
-    <h2>Metadata</h2>
-    <div class="metadata">
-        <div class="metadata-item"><span class="metadata-label">Engagement ID:</span> {{.Metadata.EngagementID}}</div>
-        <div class="metadata-item"><span class="metadata-label">Engagement Name:</span> {{.Metadata.EngagementName}}</div>
-        <div class="metadata-item"><span class="metadata-label">Owner:</span> {{.Metadata.Owner}}</div>
-        <div class="metadata-item"><span class="metadata-label">Operator:</span> {{.Metadata.Operator}}</div>
-        <div class="metadata-item"><span class="metadata-label">Started At:</span> {{.StartedAt}}</div>
-        <div class="metadata-item"><span class="metadata-label">Completed At:</span> {{.CompletedAt}}</div>
-        <div class="metadata-item"><span class="metadata-label">Duration:</span> {{.Duration}}</div>
-        <div class="metadata-item"><span class="metadata-label">Total Targets:</span> {{.Metadata.TotalTargets}}</div>
-        {{if .ResultSources}}
-        <div class="metadata-item"><span class="metadata-label">Result Files:</span> {{join .ResultSources ", "}}</div>
-        {{end}}
-        {{if .Metadata.AuditHash}}
-        <div class="metadata-item"><span class="metadata-label">Audit Hash ({{.HashAlgorithmLabel}}):</span> <span class="code">{{.Metadata.AuditHash}}</span></div>
-        {{end}}
-        {{if .Metadata.SignatureFingerprint}}
-        <div class="metadata-item"><span class="metadata-label">Signature Fingerprint:</span> <span class="code">{{.Metadata.SignatureFingerprint}}</span></div>
-        {{end}}
-    </div>
-
-    {{if .TrendHistory}}
-    <div class="section">
-        <h2>Trend Analysis</h2>
-        <p>Average Success Rate: <strong>{{formatSuccess .TrendSummary.AverageSuccess}}</strong> · Average Duration: <strong>{{formatDuration .TrendSummary.AverageDuration}}</strong></p>
-        <div class="trend-chart">
-            {{range .TrendHistory}}
-            <div class="trend-bar" style="height: {{printf "%.0f" .SuccessRate}}%">
-                <span class="trend-value">{{formatSuccess .SuccessRate}}</span>
-                <span class="trend-label">{{formatTime .Timestamp}}</span>
+        <div class="scan-header">
+            <div class="scan-info">
+                <label>Scan Date</label>
+                <value>{{.ScanDate}}</value>
             </div>
-            {{end}}
-        </div>
-        <table>
-            <tr>
-                <th>Run Time</th>
-                <th>Success Rate</th>
-                <th>Duration</th>
-                <th>Command</th>
-            </tr>
-            {{range .TrendHistory}}
-            <tr>
-                <td>{{formatTime .Timestamp}}</td>
-                <td>{{formatSuccess .SuccessRate}}</td>
-                <td>{{formatDuration .DurationSeconds}}</td>
-                <td>{{.Command}}</td>
-            </tr>
-            {{end}}
-        </table>
-    </div>
-    {{end}}
-
-    <h2>Summary</h2>
-    <div class="summary">
-        <div class="summary-card success-card">
-            <div>Successful</div>
-            <div class="summary-number">{{.SuccessCount}}</div>
-        </div>
-        <div class="summary-card error-card">
-            <div>Failed</div>
-            <div class="summary-number">{{.ErrorCount}}</div>
-        </div>
-        <div class="summary-card rate-card">
-            <div>Success Rate</div>
-            <div class="summary-number">{{.SuccessRate}}%</div>
-        </div>
-    </div>
-
-    {{if .CheckCatalog}}
-    <h2>Security Check Catalog</h2>
-    <table>
-        <thead>
-        <tr>
-            <th>Name</th>
-            <th>Category</th>
-        </tr>
-        </thead>
-        <tbody>
-        {{range .CheckCatalog}}
-        <tr>
-            <td>{{.Name}}</td>
-            <td>{{.Category}}</td>
-        </tr>
-        {{end}}
-        </tbody>
-    </table>
-    {{end}}
-
-    <h2>Results Overview</h2>
-    <table>
-        <thead>
-        <tr>
-            <th>Target</th>
-            <th>Status</th>
-            <th>HTTP Status</th>
-            <th>Server</th>
-            <th>TLS Expiry</th>
-            <th>Notes</th>
-        </tr>
-        </thead>
-        <tbody>
-        {{range .Results}}
-        <tr>
-            <td>{{.Target}}</td>
-            <td class="{{if eq .Status "ok"}}status-ok{{else}}status-error{{end}}">{{.Status}}</td>
-            <td>{{if .HTTPStatus}}{{.HTTPStatus}}{{end}}</td>
-            <td>{{.ServerHeader}}</td>
-            <td>{{.TLSExpiry}}</td>
-            <td>{{if .Notes}}{{.Notes}}{{else}}-{{end}}</td>
-        </tr>
-        {{end}}
-        </tbody>
-    </table>
-
-    <h2>Detailed Security Analysis</h2>
-
-    {{range $index, $result := .Results}}
-    <div class="target-detail">
-        <h3>{{add $index 1}}. {{$result.Target}}</h3>
-
-        <div class="section">
-            <h4>Basic Information</h4>
-            <div class="info-grid">
-                <div class="info-item"><span class="info-label">Status:</span> <span class="{{if eq $result.Status "ok"}}status-ok{{else}}status-error{{end}}">{{$result.Status}}</span></div>
-                {{if $result.HTTPStatus}}<div class="info-item"><span class="info-label">HTTP Status:</span> {{$result.HTTPStatus}}</div>{{end}}
-                {{if $result.ServerHeader}}<div class="info-item"><span class="info-label">Server:</span> {{$result.ServerHeader}}</div>{{end}}
-                {{if gt $result.ResponseTime 0.0}}<div class="info-item"><span class="info-label">Response Time:</span> {{printf "%.2f" $result.ResponseTime}} ms</div>{{end}}
-                {{if $result.Notes}}<div class="info-item"><span class="info-label">Notes:</span> {{$result.Notes}}</div>{{end}}
+            <div class="scan-info">
+                <label>Duration</label>
+                <value>{{.Duration}}</value>
             </div>
-            {{if $result.Error}}
-            <div class="warning"><strong>Error:</strong> {{$result.Error}}</div>
-            {{end}}
+            <div class="scan-info">
+                <label>Scan URL</label>
+                <value>{{.ScanURL}}</value>
+            </div>
+            <div class="scan-info">
+                <label>Status</label>
+                <value class="status-completed">{{.Status}}</value>
+            </div>
+            <div class="scan-info">
+                <label>Vulnerabilities</label>
+                <value>Critical: {{.Summary.Critical}}, Medium: {{.Summary.Medium}}</value>
+            </div>
         </div>
 
-        {{if $result.SecurityHeaders}}
-        <div class="section">
-            <h4>Security Headers Analysis</h4>
-            <p>
-                <strong>Overall Score:</strong> {{$result.SecurityHeaders.Score}}/{{$result.SecurityHeaders.MaxScore}}
-                <span class="grade-badge grade-{{$result.SecurityHeaders.Grade}}">Grade: {{$result.SecurityHeaders.Grade}}</span>
-            </p>
-            <p><strong>Headers Present:</strong> {{headersPresentCount $result.SecurityHeaders}}/8 | <strong>Headers Missing:</strong> {{len $result.SecurityHeaders.Missing}}</p>
+        {{if gt .Summary.Total 0}}
+        <h2>Security Findings</h2>
 
-            <h5>Header Details:</h5>
-            <ul>
-                {{range $name, $header := $result.SecurityHeaders.Headers}}
-                <li>
-                    {{if $header.Present}}
-                    <span class="header-present">✅ <strong>{{$name}}</strong></span> (Score: {{$header.Score}}/{{$header.MaxScore}})
-                    {{if $header.Value}}<br>&nbsp;&nbsp;&nbsp;&nbsp;Value: <span class="code">{{$header.Value}}</span>{{end}}
-                    {{if $header.Issues}}
-                    <ul>
-                        {{range $header.Issues}}<li>⚠️ {{.}}</li>{{end}}
-                    </ul>
-                    {{end}}
-                    {{else}}
-                    <span class="header-missing">❌ <strong>{{$name}}</strong></span> (Score: {{$header.Score}}/{{$header.MaxScore}}, Severity: {{$header.Severity}})
-                    {{if $header.Recommendation}}<br>&nbsp;&nbsp;&nbsp;&nbsp;💡 {{$header.Recommendation}}{{end}}
-                    {{end}}
-                </li>
-                {{end}}
-            </ul>
-
-            {{if $result.SecurityHeaders.Warnings}}
-            <h5>Warnings:</h5>
-            {{range $result.SecurityHeaders.Warnings}}
-            <div class="warning">⚠️ {{.}}</div>
-            {{end}}
-            {{end}}
-        </div>
-        {{end}}
-
-        {{if $result.TLSCompliance}}
-        <div class="section">
-            <h4>TLS Compliance Analysis</h4>
-            <p>
-                <strong>Overall Status:</strong>
-                {{if $result.TLSCompliance.Compliant}}
-                <span class="compliant-yes">✅ COMPLIANT</span>
-                {{else}}
-                <span class="compliant-no">❌ NON-COMPLIANT</span>
-                {{end}}
-            </p>
-
-            <h5>Configuration:</h5>
-            <div class="info-grid">
-                <div class="info-item"><span class="info-label">TLS Version:</span> {{$result.TLSCompliance.TLSVersion}}</div>
-                <div class="info-item"><span class="info-label">Cipher Suite:</span> <span class="code">{{$result.TLSCompliance.CipherSuite}}</span></div>
-            </div>
-
-            <h5>Standards Compliance:</h5>
-            <ul>
-                <li>
-                    {{if $result.TLSCompliance.Standards.OWASPASVS9.Compliant}}✅{{else}}❌{{end}}
-                    <strong>OWASP ASVS v9</strong> (Level: {{$result.TLSCompliance.Standards.OWASPASVS9.Level}})
-                    {{if $result.TLSCompliance.Standards.OWASPASVS9.Passed}}
-                    <br>&nbsp;&nbsp;&nbsp;&nbsp;Passed Controls: {{join $result.TLSCompliance.Standards.OWASPASVS9.Passed ", "}}
-                    {{end}}
-                    {{if $result.TLSCompliance.Standards.OWASPASVS9.Failed}}
-                    <br>&nbsp;&nbsp;&nbsp;&nbsp;Failed Controls: {{join $result.TLSCompliance.Standards.OWASPASVS9.Failed ", "}}
-                    {{end}}
-                </li>
-                <li>
-                    {{if $result.TLSCompliance.Standards.PCIDSS41.Compliant}}✅{{else}}❌{{end}}
-                    <strong>PCI DSS 4.1</strong>
-                    {{if $result.TLSCompliance.Standards.PCIDSS41.Passed}}
-                    <br>&nbsp;&nbsp;&nbsp;&nbsp;Passed Controls: {{join $result.TLSCompliance.Standards.PCIDSS41.Passed ", "}}
-                    {{end}}
-                    {{if $result.TLSCompliance.Standards.PCIDSS41.Failed}}
-                    <br>&nbsp;&nbsp;&nbsp;&nbsp;Failed Controls: {{join $result.TLSCompliance.Standards.PCIDSS41.Failed ", "}}
-                    {{end}}
-                </li>
-                <li>
-                    {{if $result.TLSCompliance.Standards.NIST80052r2.Compliant}}✅{{else}}❌{{end}}
-                    <strong>NIST SP 800-52r2</strong> (Level: {{$result.TLSCompliance.Standards.NIST80052r2.Level}})
-                    {{if $result.TLSCompliance.Standards.NIST80052r2.Passed}}
-                    <br>&nbsp;&nbsp;&nbsp;&nbsp;Passed Controls: {{join $result.TLSCompliance.Standards.NIST80052r2.Passed ", "}}
-                    {{end}}
-                    {{if $result.TLSCompliance.Standards.NIST80052r2.Failed}}
-                    <br>&nbsp;&nbsp;&nbsp;&nbsp;Failed Controls: {{join $result.TLSCompliance.Standards.NIST80052r2.Failed ", "}}
-                    {{end}}
-                </li>
-            </ul>
-
-            {{if $result.TLSCompliance.CertificateInfo}}
-            <h5>Certificate Information:</h5>
-            <div class="info-grid">
-                <div class="info-item"><span class="info-label">Subject:</span> {{$result.TLSCompliance.CertificateInfo.Subject}}</div>
-                <div class="info-item"><span class="info-label">Issuer:</span> {{$result.TLSCompliance.CertificateInfo.Issuer}}</div>
-                <div class="info-item"><span class="info-label">Valid From:</span> {{$result.TLSCompliance.CertificateInfo.NotBefore}}</div>
-                <div class="info-item"><span class="info-label">Valid Until:</span> {{$result.TLSCompliance.CertificateInfo.NotAfter}}</div>
-                <div class="info-item"><span class="info-label">Days Until Expiry:</span> {{$result.TLSCompliance.CertificateInfo.DaysUntilExpiry}}</div>
-                <div class="info-item"><span class="info-label">Self-Signed:</span> {{$result.TLSCompliance.CertificateInfo.SelfSigned}}</div>
-                <div class="info-item"><span class="info-label">Valid Chain:</span> {{$result.TLSCompliance.CertificateInfo.ValidChain}}</div>
-                <div class="info-item"><span class="info-label">Signature Algorithm:</span> {{$result.TLSCompliance.CertificateInfo.SignatureAlg}}</div>
-                <div class="info-item"><span class="info-label">Public Key Algorithm:</span> {{$result.TLSCompliance.CertificateInfo.PublicKeyAlg}}</div>
-                <div class="info-item"><span class="info-label">Key Size:</span> {{$result.TLSCompliance.CertificateInfo.KeySize}} bits</div>
-                <div class="info-item"><span class="info-label">Chain Depth:</span> {{$result.TLSCompliance.CertificateInfo.ChainDepth}}</div>
-            </div>
-
-            {{if $result.TLSCompliance.CertificateInfo.DNSNames}}
-            <p><strong>DNS Names:</strong> {{join $result.TLSCompliance.CertificateInfo.DNSNames ", "}}</p>
-            {{end}}
-
-            {{if $result.TLSCompliance.CertificateInfo.ChainSubjects}}
-            <div class="cert-chain">
-                <strong>Certificate Chain:</strong>
-                {{range $i, $subject := $result.TLSCompliance.CertificateInfo.ChainSubjects}}
-                <div class="cert-chain-item">{{add $i 1}}. {{$subject}}</div>
-                {{end}}
-            </div>
-            {{end}}
-            {{end}}
-
-            {{if $result.TLSCompliance.Recommendations}}
-            <h5>Recommendations:</h5>
-            {{range $result.TLSCompliance.Recommendations}}
-            <div class="recommendation">💡 {{.}}</div>
-            {{end}}
-            {{end}}
-        </div>
-        {{end}}
-
-        {{if $result.CookieFindings}}
-        <div class="section">
-            <h4>Cookie & Session Flags (OWASP ASVS §3.4)</h4>
-            <table>
-                <thead>
+        <table class="findings-table">
+            <thead>
                 <tr>
                     <th>Name</th>
-                    <th>Missing Secure</th>
-                    <th>Missing HttpOnly</th>
-                    <th>Set-Cookie</th>
+                    <th>Category</th>
+                    <th>Max Score</th>
+                    <th>Score</th>
+                    <th>Severity</th>
+                    <th>Status</th>
                 </tr>
-                </thead>
-                <tbody>
-                {{range $result.CookieFindings}}
+            </thead>
+            <tbody>
+                {{range $index, $vuln := .Vulnerabilities}}
+                <tr class="vulnerability-row" onclick="toggleDetails({{$index}})">
+                    <td>{{$vuln.Name}}<span class="toggle-icon">−</span></td>
+                    <td>{{$vuln.Category}}</td>
+                    <td>{{$vuln.MaxScore}}</td>
+                    <td>{{$vuln.Score}}</td>
+                    <td><span class="severity-badge severity-{{$vuln.Severity | lower}}">{{$vuln.Severity}}</span></td>
+                    <td><span class="status-badge status-{{$vuln.Status | lower}}">{{$vuln.Status}}</span></td>
+                </tr>
                 <tr>
-                    <td>{{.Name}}</td>
-                    <td>{{if .MissingSecure}}⚠️{{else}}✅{{end}}</td>
-                    <td>{{if .MissingHTTPOnly}}⚠️{{else}}✅{{end}}</td>
-                    <td>{{if .OriginalSetCookie}}<span class="code">{{.OriginalSetCookie}}</span>{{else}}-{{end}}</td>
+                    <td colspan="6">
+                        <div class="vulnerability-details" id="details-{{$index}}">
+                            <div class="details-section">
+                                <h3>Description</h3>
+                                <p>{{$vuln.Description}}</p>
+                            </div>
+
+                            <div class="details-section">
+                                <h3>Recommendation</h3>
+                                <pre style="white-space: pre-wrap; font-family: inherit;">{{$vuln.Recommendation}}</pre>
+                            </div>
+
+                            {{if $vuln.CodeExample}}
+                            <div class="details-section">
+                                <h3>Example Implementation</h3>
+                                <div class="code-example">{{$vuln.CodeExample}}</div>
+                            </div>
+                            {{end}}
+
+                            {{if $vuln.CVSS}}
+                            <div class="details-section">
+                                <div class="cvss-score">
+                                    <strong>CVSS:</strong>
+                                    Base Score: {{$vuln.CVSS.BaseScore}} (Severity: {{$vuln.CVSS.Severity}}),
+                                    Vector: {{$vuln.CVSS.Vector}}
+                                </div>
+                            </div>
+                            {{end}}
+
+                            {{if $vuln.TestingStrategy}}
+                            <div class="recommendation-note">
+                                <h4>Testing Strategy</h4>
+                                <pre style="white-space: pre-wrap; font-family: inherit; color: #856404;">{{$vuln.TestingStrategy}}</pre>
+                            </div>
+                            {{end}}
+
+                            <div class="details-section">
+                                <h3>Affected URLs</h3>
+                                <div class="affected-urls">
+                                    <strong>Detected on all {{len $vuln.AffectedURLs}} analyzed pages (including
+                                        {{range $i, $url := $vuln.AffectedURLs}}
+                                            {{if $i}}, {{end}}{{$url}}
+                                        {{end}}
+                                    )</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
                 </tr>
                 {{end}}
-                </tbody>
-            </table>
-        </div>
-        {{end}}
-        {{if $result.CORSInsights}}
-        <div class="section">
-            <h4>CORS Policy (OWASP Top 10 A5:2021)</h4>
-            <p><strong>Allow-Origin:</strong> {{if $result.CORSInsights.AllowOrigin}}{{ $result.CORSInsights.AllowOrigin }}{{else}}(missing){{end}}</p>
-            <p><strong>Allows Any Origin:</strong> {{if $result.CORSInsights.AllowsAnyOrigin}}Yes{{else}}No{{end}}</p>
-            <p><strong>Allows Credentials:</strong> {{if $result.CORSInsights.AllowCredentials}}Yes{{else}}No{{end}}</p>
-            {{if $result.CORSInsights.Issues}}
-            <h5>Issues:</h5>
-            <ul>{{range $result.CORSInsights.Issues}}<li>{{.}}</li>{{end}}</ul>
-            {{end}}
-        </div>
-        {{end}}
-        {{if $result.CachePolicy}}
-        <div class="section">
-            <h4>Cache Policy / Performance</h4>
-            <p><strong>Cache-Control:</strong> {{if $result.CachePolicy.CacheControl}}{{ $result.CachePolicy.CacheControl }}{{else}}(missing){{end}}</p>
-            <p><strong>Expires:</strong> {{if $result.CachePolicy.Expires}}{{ $result.CachePolicy.Expires }}{{else}}(missing){{end}}</p>
-            <p><strong>Pragma:</strong> {{if $result.CachePolicy.Pragma}}{{ $result.CachePolicy.Pragma }}{{else}}(missing){{end}}</p>
-            {{if $result.CachePolicy.Issues}}
-            <h5>Issues:</h5>
-            <ul>{{range $result.CachePolicy.Issues}}<li>{{.}}</li>{{end}}</ul>
-            {{end}}
-        </div>
-        {{end}}
-
-        {{if $result.NetworkSecurity}}
-        {{$net := $result.NetworkSecurity}}
-        <div class="section">
-            <h4>Network Exposure Analysis</h4>
-
-            {{if $net.SubdomainTakeover}}
-            <div class="info-grid">
-                <div class="info-item"><span class="info-label">Subdomain Takeover:</span>
-                    {{if $net.SubdomainTakeover.Vulnerable}}<span class="status-error">VULNERABLE</span>{{else}}<span class="status-ok">No indicators</span>{{end}}
-                </div>
-                {{if $net.SubdomainTakeover.CNAME}}<div class="info-item"><span class="info-label">CNAME:</span> {{$net.SubdomainTakeover.CNAME}}</div>{{end}}
-                {{if $net.SubdomainTakeover.Provider}}<div class="info-item"><span class="info-label">Provider:</span> {{$net.SubdomainTakeover.Provider}}</div>{{end}}
-                {{if $net.SubdomainTakeover.ResolvedIPs}}<div class="info-item"><span class="info-label">Resolved IPs:</span> {{join $net.SubdomainTakeover.ResolvedIPs ", "}}</div>{{end}}
-            </div>
-            {{if $net.SubdomainTakeover.Recommendation}}
-            <div class="warning">{{$net.SubdomainTakeover.Recommendation}}</div>
-            {{end}}
-            {{end}}
-
-            {{if gt (len $net.OpenPorts) 0}}
-            <h5>Open Ports</h5>
-            <table class="ports-table">
-                <thead>
-                    <tr>
-                        <th>Port</th>
-                        <th>Service</th>
-                        <th>Risk</th>
-                        <th>Banner</th>
-                        <th>Description</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {{range $net.OpenPorts}}
-                    <tr>
-                        <td>{{.Port}}/{{.Protocol}}</td>
-                        <td>{{.Service}}</td>
-                        <td><span class="badge {{riskBadgeClass .Risk}}">{{.Risk}}</span></td>
-                        <td>{{if .Banner}}<span class="code">{{.Banner}}</span>{{else}}-{{end}}</td>
-                        <td>{{.Description}}</td>
-                    </tr>
-                    {{end}}
-                </tbody>
-            </table>
-            {{end}}
-
-            {{if or (gt (len $net.Issues) 0) (gt (len $net.Recommendations) 0)}}
-            <div class="network-issues">
-                {{if gt (len $net.Issues) 0}}
-                <div>
-                    <strong>Issues</strong>
-                    <ul>
-                        {{range $net.Issues}}<li>⚠️ {{.}}</li>{{end}}
-                    </ul>
-                </div>
-                {{end}}
-                {{if gt (len $net.Recommendations) 0}}
-                <div>
-                    <strong>Recommendations</strong>
-                    <ul>
-                        {{range $net.Recommendations}}<li>💡 {{.}}</li>{{end}}
-                    </ul>
-                </div>
-                {{end}}
-            </div>
-            {{end}}
-        </div>
-        {{end}}
-        {{if $result.ThirdPartyScripts}}
-        <div class="section">
-            <h4>Third-Party Scripts (Supply Chain)</h4>
-            <ul>{{range $result.ThirdPartyScripts}}<li>{{.}}</li>{{end}}</ul>
-        </div>
-        {{end}}
-        {{if $result.Notes}}
-        <div class="section">
-            <h4>Additional Notes</h4>
-            <p>{{ $result.Notes }}</p>
-        </div>
-        {{end}}
-
-        {{if $result.DNSRecords}}
-        <div class="section">
-            <h4>DNS Records</h4>
-            {{if index $result.DNSRecords "a_records"}}
-            <p><strong>A Records (IPv4):</strong></p>
-            <ul>{{range index $result.DNSRecords "a_records"}}<li>{{.}}</li>{{end}}</ul>
-            {{end}}
-            {{if index $result.DNSRecords "aaaa_records"}}
-            <p><strong>AAAA Records (IPv6):</strong></p>
-            <ul>{{range index $result.DNSRecords "aaaa_records"}}<li>{{.}}</li>{{end}}</ul>
-            {{end}}
-            {{if index $result.DNSRecords "cname_records"}}
-            <p><strong>CNAME Records:</strong></p>
-            <ul>{{range index $result.DNSRecords "cname_records"}}<li>{{.}}</li>{{end}}</ul>
-            {{end}}
-            {{if index $result.DNSRecords "mx_records"}}
-            <p><strong>MX Records (Mail Servers):</strong></p>
-            <ul>{{range index $result.DNSRecords "mx_records"}}<li>{{.}}</li>{{end}}</ul>
-            {{end}}
-            {{if index $result.DNSRecords "ns_records"}}
-            <p><strong>NS Records (Name Servers):</strong></p>
-            <ul>{{range index $result.DNSRecords "ns_records"}}<li>{{.}}</li>{{end}}</ul>
-            {{end}}
-            {{if index $result.DNSRecords "txt_records"}}
-            <p><strong>TXT Records:</strong></p>
-            <ul>{{range index $result.DNSRecords "txt_records"}}<li>{{.}}</li>{{end}}</ul>
-            {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <div class="vulnerabilities-summary">
+            <strong>✓ No vulnerabilities found! All security checks passed.</strong>
         </div>
         {{end}}
     </div>
-    {{end}}
 
-    <div class="footer">
-        Report generated by seca-cli on {{.FooterDate}}
-    </div>
-</div>
+    <script>
+        function toggleDetails(index) {
+            const details = document.getElementById('details-' + index);
+            const row = details.closest('tr').previousElementSibling;
+
+            if (details.classList.contains('active')) {
+                details.classList.remove('active');
+                row.classList.remove('active');
+            } else {
+                details.classList.add('active');
+                row.classList.add('active');
+            }
+        }
+
+        // Helper function for lowercase filter
+        document.querySelectorAll('[class*="severity-"]').forEach(el => {
+            const severity = el.textContent.toLowerCase();
+            el.classList.add('severity-' + severity);
+        });
+    </script>
 </body>
 </html>

@@ -21,7 +21,7 @@ seca serve \
 ```
 
 * Shares the same binary/`AppContext` as the CLI—no new daemon to deploy.
-* Reads/writes the existing `engagements.json`, `results.json`, and `telemetry.jsonl` files on disk. **No database** required.
+* Reads/writes the existing `engagements.json`, `http_results.json`, and `telemetry.jsonl` files on disk. **No database** required.
 * Supports graceful shutdown via `SIGTERM` or `Ctrl+C` to complete in-flight requests.
 * Built-in HTTP timeouts prevent resource exhaustion (read: 15s, write: 30s, idle: 120s).
 
@@ -33,7 +33,7 @@ seca serve \
 | GET    | `/api/engagements`      | list from `engagements.json` |
 | POST   | `/api/engagements`      | create engagement (validates ROE + scope) |
 | GET    | `/api/engagements/{id}` | single engagement |
-| GET    | `/api/results/{id}`     | streams `results.json` |
+| GET    | `/api/results/{id}`     | streams `http_results.json` |
 | GET    | `/api/telemetry/{id}`   | pull history (`?limit=`) |
 | POST   | `/api/jobs`             | enqueue a scan (currently `type=“http”`) |
 | GET    | `/api/jobs`             | list recent jobs |
