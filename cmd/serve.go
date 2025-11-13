@@ -38,7 +38,11 @@ var serveCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to create logger: %w", err)
 		}
-		defer logger.Sync()
+		defer func() {
+			if err := logger.Sync(); err != nil {
+				fmt.Fprintf(os.Stderr, "failed to sync logger: %v\n", err)
+			}
+		}()
 
 		jobManager := api.NewJobManager()
 		runner, err := newCliCheckRunner()

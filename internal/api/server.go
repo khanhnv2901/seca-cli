@@ -307,11 +307,25 @@ func (s *Server) handleJobStream(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return
 			}
-			payload, _ := json.Marshal(job)
-			w.Write([]byte("event: job\n"))
-			w.Write([]byte("data: "))
-			w.Write(payload)
-			w.Write([]byte("\n\n"))
+			payload, err := json.Marshal(job)
+			if err != nil {
+				if s.cfg.Logger != nil {
+					s.cfg.Logger.Error("failed to marshal job", zap.Error(err))
+				}
+				continue
+			}
+			if !s.writeStreamChunk(w, []byte("event: job\n")) {
+				return
+			}
+			if !s.writeStreamChunk(w, []byte("data: ")) {
+				return
+			}
+			if !s.writeStreamChunk(w, payload) {
+				return
+			}
+			if !s.writeStreamChunk(w, []byte("\n\n")) {
+				return
+			}
 			flusher.Flush()
 		case <-ctx.Done():
 			return
@@ -484,6 +498,16 @@ func (s *Server) writeError(w http.ResponseWriter, status int, err error) {
 
 func (s *Server) methodNotAllowed(w http.ResponseWriter) {
 	s.writeError(w, http.StatusMethodNotAllowed, errors.New("method not allowed"))
+}
+
+func (s *Server) writeStreamChunk(w http.ResponseWriter, data []byte) bool {
+	if _, err := w.Write(data); err != nil {
+		if s.cfg.Logger != nil {
+			s.cfg.Logger.Error("failed to write stream chunk", zap.Error(err))
+		}
+		return false
+	}
+	return true
 }
 
 // rateLimiterMap manages per-IP rate limiters with automatic cleanup
