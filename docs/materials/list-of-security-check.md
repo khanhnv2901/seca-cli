@@ -19,7 +19,7 @@
 | Permissions-Policy header               | Miscellaneous Headers                 | ✅          |
 | Referrer Policy                         | Miscellaneous Headers                 | ✅          |
 | Server information disclosure           | Miscellaneous Headers                 | ✅          |
-| Content-Type header                     | Miscellaneous Headers                 | ⛔️          |
+| Content-Type header                     | Miscellaneous Headers                 | ✅          |
 | Deprecated X-XSS-Protection header      | Miscellaneous Headers                 | ✅          |
 | Vulnerable JS Libraries                 | Miscellaneous                         | ⛔️          |
 | Anti-CSRF Tokens                        | Cross-Site Scripting (XSS) Protection | ⛔️          |

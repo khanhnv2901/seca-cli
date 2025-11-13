@@ -72,6 +72,13 @@ var securityHeaderSpecs = map[string]SecurityHeaderSpec{
 		CheckFunc:      checkCOEP,
 		Recommendation: "Add 'Cross-Origin-Embedder-Policy: require-corp'",
 	},
+	"Content-Type": {
+		Name:           "Content-Type",
+		Severity:       "medium",
+		MaxScore:       5,
+		CheckFunc:      checkContentType,
+		Recommendation: "Add 'Content-Type' header with appropriate charset (e.g., 'text/html; charset=utf-8')",
+	},
 }
 
 // informationDisclosureHeaders lists headers that should be removed/obfuscated
@@ -89,7 +96,7 @@ func AnalyzeSecurityHeaders(headers http.Header) *SecurityHeadersResult {
 		Missing:         []string{},
 		Warnings:        []string{},
 		Recommendations: []string{},
-		MaxScore:        100,
+		MaxScore:        105, // Updated to include Content-Type (5 points)
 	}
 
 	totalScore := 0
@@ -403,6 +410,45 @@ func checkInformationDisclosure(headers http.Header, result *SecurityHeadersResu
 				headerName+" header exposes server information: '"+value+"'. Consider removing or obfuscating.")
 		}
 	}
+}
+
+// checkContentType validates the Content-Type header
+func checkContentType(value string) (int, []string, string) {
+	issues := []string{}
+	score := 5
+	recommendation := ""
+
+	value = strings.ToLower(value)
+
+	// Content-Type should be present and specify charset for text content
+	if value == "" {
+		issues = append(issues, "Content-Type header is missing")
+		score = 0
+		recommendation = "Add Content-Type header with appropriate MIME type and charset"
+		return score, issues, recommendation
+	}
+
+	// Check if it's a text-based content type without charset
+	textTypes := []string{"text/html", "text/plain", "text/css", "text/javascript", "application/javascript", "application/json"}
+	isTextType := false
+	for _, textType := range textTypes {
+		if strings.Contains(value, textType) {
+			isTextType = true
+			break
+		}
+	}
+
+	if isTextType && !strings.Contains(value, "charset") {
+		issues = append(issues, "Text content should specify charset (e.g., charset=utf-8)")
+		score = 2
+		recommendation = "Add charset parameter to Content-Type (e.g., 'text/html; charset=utf-8')"
+	} else if isTextType && strings.Contains(value, "charset=utf-8") {
+		recommendation = "Content-Type is properly configured with UTF-8 charset"
+	} else {
+		recommendation = "Content-Type header is present"
+	}
+
+	return score, issues, recommendation
 }
 
 // calculateGrade converts a score to a letter grade

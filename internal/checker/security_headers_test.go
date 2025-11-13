@@ -15,6 +15,7 @@ func TestAnalyzeSecurityHeaders_AllPresent(t *testing.T) {
 	headers.Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
 	headers.Set("Cross-Origin-Opener-Policy", "same-origin")
 	headers.Set("Cross-Origin-Embedder-Policy", "require-corp")
+	headers.Set("Content-Type", "text/html; charset=utf-8")
 
 	result := AnalyzeSecurityHeaders(headers)
 
@@ -27,7 +28,7 @@ func TestAnalyzeSecurityHeaders_AllPresent(t *testing.T) {
 	}
 
 	if len(result.Missing) != 0 {
-		t.Errorf("Expected no missing headers, got %d", len(result.Missing))
+		t.Errorf("Expected no missing headers, got %d: %v", len(result.Missing), result.Missing)
 	}
 }
 
@@ -44,8 +45,8 @@ func TestAnalyzeSecurityHeaders_AllMissing(t *testing.T) {
 		t.Errorf("Expected grade F, got %s", result.Grade)
 	}
 
-	if len(result.Missing) != 8 {
-		t.Errorf("Expected 8 missing headers, got %d", len(result.Missing))
+	if len(result.Missing) != 9 {
+		t.Errorf("Expected 9 missing headers, got %d: %v", len(result.Missing), result.Missing)
 	}
 }
 
@@ -488,4 +489,105 @@ func indexStr(s, substr string) int {
 		}
 	}
 	return -1
+}
+
+func TestCheckContentType_Perfect(t *testing.T) {
+	score, issues, rec := checkContentType("text/html; charset=utf-8")
+	if score != 5 {
+		t.Errorf("Expected score 5, got %d", score)
+	}
+	if len(issues) != 0 {
+		t.Errorf("Expected no issues, got %v", issues)
+	}
+	if rec != "Content-Type is properly configured with UTF-8 charset" {
+		t.Errorf("Unexpected recommendation: %s", rec)
+	}
+}
+
+func TestCheckContentType_MissingCharset(t *testing.T) {
+	score, issues, rec := checkContentType("text/html")
+	if score != 2 {
+		t.Errorf("Expected score 2, got %d", score)
+	}
+	if len(issues) == 0 {
+		t.Error("Expected issues about missing charset")
+	}
+	if rec != "Add charset parameter to Content-Type (e.g., 'text/html; charset=utf-8')" {
+		t.Errorf("Unexpected recommendation: %s", rec)
+	}
+}
+
+func TestCheckContentType_Missing(t *testing.T) {
+	score, issues, rec := checkContentType("")
+	if score != 0 {
+		t.Errorf("Expected score 0, got %d", score)
+	}
+	if len(issues) == 0 {
+		t.Error("Expected issues about missing header")
+	}
+	if rec != "Add Content-Type header with appropriate MIME type and charset" {
+		t.Errorf("Unexpected recommendation: %s", rec)
+	}
+}
+
+func TestCheckContentType_NonTextType(t *testing.T) {
+	tests := []struct {
+		name        string
+		contentType string
+	}{
+		{"image", "image/png"},
+		{"video", "video/mp4"},
+		{"binary", "application/octet-stream"},
+		{"pdf", "application/pdf"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			score, issues, rec := checkContentType(tt.contentType)
+			if score != 5 {
+				t.Errorf("Expected score 5 for non-text type, got %d", score)
+			}
+			if len(issues) != 0 {
+				t.Errorf("Expected no issues for non-text type, got %v", issues)
+			}
+			if rec != "Content-Type header is present" {
+				t.Errorf("Unexpected recommendation: %s", rec)
+			}
+		})
+	}
+}
+
+func TestCheckContentType_TextTypes(t *testing.T) {
+	tests := []struct {
+		name        string
+		contentType string
+		wantScore   int
+		wantIssues  bool
+	}{
+		{"html with charset", "text/html; charset=utf-8", 5, false},
+		{"html no charset", "text/html", 2, true},
+		{"json with charset", "application/json; charset=utf-8", 5, false},
+		{"json no charset", "application/json", 2, true},
+		{"javascript with charset", "text/javascript; charset=utf-8", 5, false},
+		{"javascript no charset", "application/javascript", 2, true},
+		{"css with charset", "text/css; charset=utf-8", 5, false},
+		{"css no charset", "text/css", 2, true},
+		{"plain with charset", "text/plain; charset=utf-8", 5, false},
+		{"plain no charset", "text/plain", 2, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			score, issues, _ := checkContentType(tt.contentType)
+			if score != tt.wantScore {
+				t.Errorf("Expected score %d, got %d", tt.wantScore, score)
+			}
+			if tt.wantIssues && len(issues) == 0 {
+				t.Error("Expected issues but got none")
+			}
+			if !tt.wantIssues && len(issues) != 0 {
+				t.Errorf("Expected no issues but got: %v", issues)
+			}
+		})
+	}
 }
