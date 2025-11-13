@@ -2,6 +2,7 @@ package checker
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -135,6 +136,26 @@ func TestCheckCSP_WithWildcard(t *testing.T) {
 
 	if len(issues) == 0 {
 		t.Error("Expected issues with wildcard in CSP")
+	}
+}
+
+func TestCheckCSP_DataAndBlobSources(t *testing.T) {
+	score, issues, _ := checkCSP("script-src 'self' data: blob:; style-src 'self' data:")
+	if score >= 20 {
+		t.Errorf("Expected reduced score when data/blob allowed, got %d", score)
+	}
+	foundData := false
+	foundBlob := false
+	for _, issue := range issues {
+		if strings.Contains(issue, "data:") {
+			foundData = true
+		}
+		if strings.Contains(issue, "blob:") {
+			foundBlob = true
+		}
+	}
+	if !foundData || !foundBlob {
+		t.Fatalf("Expected issues for data/blob sources, got %v", issues)
 	}
 }
 

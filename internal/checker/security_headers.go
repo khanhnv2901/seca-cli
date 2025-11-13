@@ -200,6 +200,7 @@ func checkCSP(value string) (int, []string, string) {
 	recommendation := ""
 
 	value = strings.ToLower(value)
+	directives := parseCSPDirectives(value)
 
 	// Check for unsafe practices
 	if strings.Contains(value, "'unsafe-inline'") {
@@ -228,6 +229,38 @@ func checkCSP(value string) (int, []string, string) {
 		score -= 2
 	}
 
+	// Additional bypass heuristics for script/style directives
+	scriptTokens := directives["script-src"]
+	for _, token := range scriptTokens {
+		switch token {
+		case "data:":
+			issues = append(issues, "Script sources allow data: URIs which can enable CSP bypasses")
+			score -= 2
+		case "blob:":
+			issues = append(issues, "Script sources allow blob: URLs which may enable CSP bypasses")
+			score -= 2
+		case "filesystem:":
+			issues = append(issues, "Script sources allow filesystem: URLs which may enable CSP bypasses")
+			score -= 2
+		}
+		if strings.HasPrefix(token, "http:") {
+			issues = append(issues, "Script sources allow insecure http scheme")
+			score -= 2
+		}
+	}
+
+	styleTokens := directives["style-src"]
+	for _, token := range styleTokens {
+		if token == "data:" {
+			issues = append(issues, "Style sources allow data: URIs which may allow inline style injection")
+			score -= 1
+		}
+		if token == "'unsafe-inline'" {
+			issues = append(issues, "Style sources permit 'unsafe-inline' which weakens CSP")
+			score -= 2
+		}
+	}
+
 	if len(issues) == 0 {
 		recommendation = "CSP is present with good configuration"
 	} else {
@@ -235,6 +268,28 @@ func checkCSP(value string) (int, []string, string) {
 	}
 
 	return score, issues, recommendation
+}
+
+func parseCSPDirectives(value string) map[string][]string {
+	result := make(map[string][]string)
+	parts := strings.Split(value, ";")
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		fields := strings.Fields(part)
+		if len(fields) == 0 {
+			continue
+		}
+		name := fields[0]
+		if len(fields) > 1 {
+			result[name] = fields[1:]
+		} else {
+			result[name] = []string{}
+		}
+	}
+	return result
 }
 
 // checkXFrameOptions validates the X-Frame-Options header
