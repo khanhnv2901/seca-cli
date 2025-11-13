@@ -26,6 +26,10 @@ A professional command-line tool for managing authorized security testing engage
 - **Third-Party Scripts** - Supply-chain risk inventory and detection
 - **Cache Policy Analysis** - Performance and security cache header evaluation
 - **robots.txt & sitemap.xml** - Web crawler policy and site structure parsing
+- **In-Scope Link Discovery** - Optional crawler explores same-host links before running checks
+  - Static HTML crawling for traditional websites
+  - JavaScript-enabled crawling for SPAs (React, Vue, Angular) using headless Chrome
+  - Auto-detection of JavaScript requirements
 
 ### Compliance & Evidence
 
@@ -263,6 +267,13 @@ Common Options:
   --compliance-mode      Enable compliance enforcement
   --audit-append-raw     Save raw HTTP responses (use with caution)
   --retention-days N     Retention period for raw captures
+
+Crawling Options:
+  --crawl                Discover same-host links (auto-detects JavaScript/SPA sites)
+  --crawl-depth N        Maximum link depth to follow (default: 2)
+  --crawl-max-pages N    Maximum pages to discover per target (default: 50)
+  --crawl-force-js       Force JavaScript crawler for all targets
+  --crawl-js-wait N      Seconds to wait for JavaScript to render (default: 2)
 ```
 
 ### Report Commands
@@ -705,7 +716,43 @@ make sign ENGAGEMENT_ID=1762627948156627663
 make package ENGAGEMENT_ID=1762627948156627663
 ```
 
-### Example 3: Large-Scale Testing
+### Example 3: Crawling with Auto-Detection
+
+The `--crawl` flag automatically detects JavaScript-based SPAs (React, Vue, Angular) and uses the appropriate crawler:
+
+```bash
+# Simple - Just add --crawl flag (auto-detects JS/SPA sites)
+./seca check http \
+  --id 1762627948156627663 \
+  --roe-confirm \
+  --crawl \
+  --progress
+
+# Customize depth and pages
+./seca check http \
+  --id 1762627948156627663 \
+  --roe-confirm \
+  --crawl \
+  --crawl-depth 3 \
+  --crawl-max-pages 100
+
+# Force JavaScript crawler for known SPAs (skips detection)
+./seca check http \
+  --id 1762627948156627663 \
+  --roe-confirm \
+  --crawl \
+  --crawl-force-js \
+  --crawl-js-wait 3
+```
+
+**How it works:**
+- Traditional websites → Uses fast static HTML crawler
+- JavaScript SPAs (React/Vue/Angular) → Automatically uses headless Chrome
+- No need to specify which type - it's auto-detected!
+
+**Note:** JavaScript crawling requires Google Chrome or Chromium installed on the system.
+
+### Example 4: Large-Scale Testing
 
 ```bash
 # Add multiple targets
@@ -825,10 +872,21 @@ seca-cli/
 
 ## Dependencies
 
+### Go Dependencies
+
 - [cobra](https://github.com/spf13/cobra) - CLI framework
 - [viper](https://github.com/spf13/viper) - Configuration management
 - [zap](https://github.com/uber-go/zap) - Structured logging
 - [rate](https://golang.org/x/time/rate) - Rate limiting
+- [chromedp](https://github.com/chromedp/chromedp) - Headless Chrome automation for JavaScript crawling
+
+### System Dependencies
+
+- **Google Chrome or Chromium** (optional) - Required for JavaScript-enabled crawling of SPAs
+  - Install on Debian/Ubuntu: `sudo apt install chromium-browser`
+  - Install on Fedora: `sudo dnf install chromium`
+  - Install on macOS: `brew install chromium`
+  - Install on Arch: `sudo pacman -S chromium`
 
 ## Development
 

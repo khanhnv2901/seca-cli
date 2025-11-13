@@ -42,12 +42,23 @@ type CheckRuntimeConfig struct {
 	SecureResults    bool
 	RetryCount       int
 	DNS              DNSConfig
+	Crawl            CrawlConfig
 }
 
 // DNSConfig groups DNS-specific runtime options.
 type DNSConfig struct {
 	Nameservers []string
 	Timeout     int
+}
+
+// CrawlConfig captures HTTP crawl/discovery options.
+type CrawlConfig struct {
+	Enabled        bool
+	MaxDepth       int
+	MaxPages       int
+	EnableJS       bool
+	JSWaitTime     int // Time in seconds to wait for JavaScript to render
+	AutoDetectJS   bool
 }
 
 type defaultOverrides struct {
@@ -81,6 +92,14 @@ func newCLIConfig() *CLIConfig {
 			DNS: DNSConfig{
 				Nameservers: []string{},
 				Timeout:     defaultDNSTimeoutSeconds,
+			},
+			Crawl: CrawlConfig{
+				Enabled:      false,
+				MaxDepth:     2,
+				MaxPages:     50,
+				EnableJS:     false,
+				JSWaitTime:   2,
+				AutoDetectJS: true, // Auto-detect by default when crawling is enabled
 			},
 		},
 	}

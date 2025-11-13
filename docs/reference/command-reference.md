@@ -415,6 +415,9 @@ seca check http --id <id> --roe-confirm [flags] <target1> <target2> ...
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--audit-append-raw` | bool | false | Save raw HTTP headers/body for evidence |
+| `--crawl` | bool | false | Discover same-host links before running checks |
+| `--crawl-depth` | int | 1 | Maximum link depth to follow when crawling |
+| `--crawl-max-pages` | int | 25 | Maximum additional pages per scoped target |
 | `--retention-days` | int | - | Retention period for raw captures (required with `--audit-append-raw` in compliance mode) |
 
 **Examples:**
@@ -427,6 +430,13 @@ seca check http --id eng123 --roe-confirm example.com
 seca check http --id eng123 --roe-confirm \
   --concurrency 10 \
   api.example.com app.example.com web.example.com
+
+# Crawl within each scoped host
+seca check http --id hipaa-audit --roe-confirm \
+  --crawl \
+  --crawl-depth 2 \
+  --crawl-max-pages 40 \
+  portal.examplehospital.com
 
 # Compliance mode with raw capture
 seca check http --id hipaa-audit --roe-confirm \

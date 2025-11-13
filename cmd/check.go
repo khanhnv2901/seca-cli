@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -298,6 +299,7 @@ func runCheckCommand(cmd *cobra.Command, config checkConfig) error {
 	}
 
 	targetOrder := append([]string(nil), eng.Scope...)
+	targetOrder = expandTargetsWithCrawl(ctx, targetOrder, runtimeCfg)
 	pending := append([]string(nil), targetOrder...)
 	finalResults := make(map[string]checker.CheckResult, len(targetOrder))
 	maxAttempts := retryCount + 1
@@ -432,6 +434,109 @@ func runCheckCommand(cmd *cobra.Command, config checkConfig) error {
 	}
 
 	return nil
+}
+
+func expandTargetsWithCrawl(ctx context.Context, targets []string, runtimeCfg CheckRuntimeConfig) []string {
+	crawl := runtimeCfg.Crawl
+	if !crawl.Enabled || crawl.MaxDepth <= 0 || crawl.MaxPages <= 0 {
+		return targets
+	}
+
+	crawlOpts := checker.CrawlOptions{
+		MaxDepth:     crawl.MaxDepth,
+		MaxPages:     crawl.MaxPages,
+		SameHostOnly: true,
+		Timeout:      time.Duration(runtimeCfg.TimeoutSecs) * time.Second,
+	}
+
+	jsCrawlOpts := checker.JSCrawlOptions{
+		CrawlOptions:     crawlOpts,
+		EnableJavaScript: crawl.EnableJS,
+		WaitTime:         time.Duration(crawl.JSWaitTime) * time.Second,
+	}
+
+	set := newTargetSet()
+	expanded := make([]string, 0, len(targets)+crawl.MaxPages*len(targets))
+
+	for _, target := range targets {
+		if set.Add(target) {
+			expanded = append(expanded, target)
+		}
+
+		var discovered []string
+		var err error
+
+		if crawl.AutoDetectJS {
+			// Auto-detect if JavaScript is needed
+			discovered, err = checker.DiscoverInScopeLinksAuto(ctx, target, jsCrawlOpts)
+		} else if crawl.EnableJS {
+			// Force JavaScript crawler
+			discovered, err = checker.DiscoverInScopeLinksJS(ctx, target, jsCrawlOpts)
+		} else {
+			// Use static crawler only
+			discovered, err = checker.DiscoverInScopeLinks(ctx, target, crawlOpts)
+		}
+
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: crawl failed for %s: %v\n", target, err)
+			continue
+		}
+
+		appended := 0
+		for _, url := range discovered {
+			if set.Add(url) {
+				expanded = append(expanded, url)
+				appended++
+			}
+		}
+		if appended > 0 {
+			crawlType := "static"
+			if crawl.EnableJS {
+				crawlType = "JavaScript-enabled"
+			} else if crawl.AutoDetectJS {
+				crawlType = "auto-detect"
+			}
+			fmt.Printf("%s discovered %d page(s) under %s [%s]\n", colorInfo("→"), appended, checker.NormalizeHTTPTarget(target), crawlType)
+		}
+	}
+
+	return expanded
+}
+
+type targetSet struct {
+	seen map[string]struct{}
+}
+
+func newTargetSet() *targetSet {
+	return &targetSet{seen: make(map[string]struct{})}
+}
+
+func (s *targetSet) Add(target string) bool {
+	if s.seen == nil {
+		s.seen = make(map[string]struct{})
+	}
+	key := canonicalTarget(target)
+	if key == "" {
+		key = target
+	}
+	if _, exists := s.seen[key]; exists {
+		return false
+	}
+	s.seen[key] = struct{}{}
+	return true
+}
+
+func canonicalTarget(target string) string {
+	normalized := checker.NormalizeHTTPTarget(target)
+	parsed, err := url.Parse(normalized)
+	if err != nil {
+		return strings.TrimRight(normalized, "/")
+	}
+	parsed.Fragment = ""
+	if parsed.Path == "" {
+		parsed.Path = "/"
+	}
+	return parsed.String()
 }
 
 // validateCheckParams validates common check command parameters
@@ -669,6 +774,11 @@ func init() {
 	addCommonCheckFlags(checkHTTPCmd)
 	checkHTTPCmd.Flags().BoolVar(&cliConfig.Check.AuditAppendRaw, "audit-append-raw", cliConfig.Check.AuditAppendRaw, "Save limited raw headers/body for auditing (handle carefully)")
 	checkHTTPCmd.Flags().IntVar(&cliConfig.Check.RetentionDays, "retention-days", cliConfig.Check.RetentionDays, "Retention period (days) for raw captures; required in compliance mode if --audit-append-raw is used")
+	checkHTTPCmd.Flags().BoolVar(&cliConfig.Check.Crawl.Enabled, "crawl", cliConfig.Check.Crawl.Enabled, "Discover same-host links (auto-detects JavaScript/SPA sites)")
+	checkHTTPCmd.Flags().IntVar(&cliConfig.Check.Crawl.MaxDepth, "crawl-depth", cliConfig.Check.Crawl.MaxDepth, "Maximum link depth to follow per target")
+	checkHTTPCmd.Flags().IntVar(&cliConfig.Check.Crawl.MaxPages, "crawl-max-pages", cliConfig.Check.Crawl.MaxPages, "Maximum additional pages to discover per target")
+	checkHTTPCmd.Flags().BoolVar(&cliConfig.Check.Crawl.EnableJS, "crawl-force-js", cliConfig.Check.Crawl.EnableJS, "Force JavaScript crawler for all targets (overrides auto-detection)")
+	checkHTTPCmd.Flags().IntVar(&cliConfig.Check.Crawl.JSWaitTime, "crawl-js-wait", cliConfig.Check.Crawl.JSWaitTime, "Seconds to wait for JavaScript to render (when JS is used)")
 
 	// DNS-specific flags
 	addCommonCheckFlags(checkDNSCmd)
