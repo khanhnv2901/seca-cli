@@ -341,6 +341,13 @@ type TemplateData struct {
 	TrendHistory       []TelemetryRecord
 	TrendSummary       TrendSummary
 	HashAlgorithmLabel string
+
+	// Fields used by the revamped HTML template
+	ScanDate        string
+	ScanURL         string
+	Status          string
+	Summary         checker.VulnerabilitySummary
+	Vulnerabilities []checker.Vulnerability
 }
 
 type reportStatsEntry struct {
@@ -657,6 +664,20 @@ func buildTemplateData(output *RunOutput, sources []string, successRateFmt strin
 		duration = 0
 	}
 
+	scanURL := deriveScanURL(output)
+	scanDate := ""
+	if !output.Metadata.StartAt.IsZero() {
+		scanDate = output.Metadata.StartAt.Format(time.RFC1123)
+	}
+
+	durationLabel := duration.Round(time.Second).String()
+	vulnReport := checker.BuildVulnerabilityReport(
+		output.Results,
+		scanURL,
+		scanDate,
+		durationLabel,
+	)
+
 	return TemplateData{
 		Metadata:           output.Metadata,
 		Results:            output.Results,
@@ -665,7 +686,7 @@ func buildTemplateData(output *RunOutput, sources []string, successRateFmt strin
 		GeneratedAt:        now.Format(time.RFC3339),
 		StartedAt:          output.Metadata.StartAt.Format(time.RFC3339),
 		CompletedAt:        output.Metadata.CompleteAt.Format(time.RFC3339),
-		Duration:           duration.Round(time.Second).String(),
+		Duration:           durationLabel,
 		SuccessCount:       okCount,
 		ErrorCount:         errorCount,
 		SuccessRate:        fmt.Sprintf(successRateFmt, successRate),
@@ -673,6 +694,11 @@ func buildTemplateData(output *RunOutput, sources []string, successRateFmt strin
 		TrendHistory:       trends,
 		TrendSummary:       summarizeTrendHistory(trends),
 		HashAlgorithmLabel: strings.ToUpper(output.Metadata.HashAlgorithm),
+		ScanDate:           scanDate,
+		ScanURL:            scanURL,
+		Status:             deriveRunStatus(okCount, errorCount, total),
+		Summary:            vulnReport.Summary,
+		Vulnerabilities:    vulnReport.Vulnerabilities,
 	}
 }
 
@@ -710,6 +736,34 @@ func executeTemplate(tmpl *template.Template, data TemplateData) (string, error)
 		return "", fmt.Errorf("failed to execute %s template: %w", tmpl.Name(), err)
 	}
 	return buf.String(), nil
+}
+
+func deriveScanURL(output *RunOutput) string {
+	for _, result := range output.Results {
+		if strings.TrimSpace(result.Target) != "" {
+			return result.Target
+		}
+	}
+	if output.Metadata.EngagementName != "" {
+		return output.Metadata.EngagementName
+	}
+	if output.Metadata.EngagementID != "" {
+		return output.Metadata.EngagementID
+	}
+	return "N/A"
+}
+
+func deriveRunStatus(okCount, errorCount, total int) string {
+	switch {
+	case total == 0:
+		return "No targets"
+	case errorCount == 0:
+		return "Completed"
+	case okCount == 0:
+		return "Failed"
+	default:
+		return "Completed with issues"
+	}
 }
 
 func summarizeReportStats(output *RunOutput) reportStatsSummary {

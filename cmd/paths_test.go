@@ -11,7 +11,37 @@ import (
 	consts "github.com/khanhnv2901/seca-cli/internal/constants"
 )
 
-func TestGetDataDir(t *testing.T) {
+func setDataDirOverride(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv(dataDirEnvVar, dir)
+	t.Setenv("XDG_DATA_HOME", "")
+	return dir
+}
+
+func clearDataDirEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv(dataDirEnvVar, "")
+	t.Setenv("XDG_DATA_HOME", "")
+}
+
+func TestGetDataDir_DefaultLocation(t *testing.T) {
+	clearDataDirEnv(t)
+	baseHome := t.TempDir()
+	switch runtime.GOOS {
+	case "windows":
+		localAppData := filepath.Join(baseHome, "LocalAppData")
+		appData := filepath.Join(baseHome, "AppData")
+		if err := os.MkdirAll(localAppData, consts.DefaultDirPerm); err != nil {
+			t.Fatalf("failed to create local app data dir: %v", err)
+		}
+		t.Setenv("LOCALAPPDATA", localAppData)
+		t.Setenv("APPDATA", appData)
+	default:
+		t.Setenv("HOME", baseHome)
+		t.Setenv("USERPROFILE", baseHome)
+	}
+
 	dataDir, err := getDataDir()
 	if err != nil {
 		t.Fatalf("getDataDir() failed: %v", err)
@@ -26,31 +56,39 @@ func TestGetDataDir(t *testing.T) {
 		t.Errorf("Data directory was not created: %s", dataDir)
 	}
 
-	// Verify it contains "seca-cli"
-	if !strings.Contains(dataDir, "seca-cli") {
-		t.Errorf("Expected data directory to contain 'seca-cli', got: %s", dataDir)
-	}
-
-	// Verify OS-specific path
+	// Verify OS-specific path rooted in the temporary home
 	switch runtime.GOOS {
 	case "windows":
-		if !strings.Contains(dataDir, "seca-cli") {
-			t.Errorf("Windows: Expected path to contain seca-cli, got: %s", dataDir)
+		expected := filepath.Join(os.Getenv("LOCALAPPDATA"), "seca-cli")
+		if dataDir != expected {
+			t.Errorf("Windows: expected %s, got %s", expected, dataDir)
 		}
 	case "darwin":
-		if !strings.Contains(dataDir, "Library") {
-			t.Errorf("macOS: Expected path to contain Library, got: %s", dataDir)
+		expected := filepath.Join(baseHome, "Library", "Application Support", "seca-cli")
+		if dataDir != expected {
+			t.Errorf("macOS: expected %s, got %s", expected, dataDir)
 		}
 	default: // Linux/Unix
-		homeDir, _ := os.UserHomeDir()
-		expectedPrefix := filepath.Join(homeDir, ".local", "share")
-		if !strings.HasPrefix(dataDir, expectedPrefix) {
-			t.Errorf("Linux: Expected path to start with %s, got: %s", expectedPrefix, dataDir)
+		expected := filepath.Join(baseHome, ".local", "share", "seca-cli")
+		if dataDir != expected {
+			t.Errorf("Linux: expected %s, got %s", expected, dataDir)
 		}
 	}
 }
 
+func TestGetDataDir_Override(t *testing.T) {
+	dir := setDataDirOverride(t)
+	dataDir, err := getDataDir()
+	if err != nil {
+		t.Fatalf("getDataDir() override failed: %v", err)
+	}
+	if dataDir != dir {
+		t.Fatalf("expected override dir %s, got %s", dir, dataDir)
+	}
+}
+
 func TestGetEngagementsFilePath(t *testing.T) {
+	override := setDataDirOverride(t)
 	filePath, err := getEngagementsFilePath()
 	if err != nil {
 		t.Fatalf("getEngagementsFilePath() failed: %v", err)
@@ -65,13 +103,18 @@ func TestGetEngagementsFilePath(t *testing.T) {
 	}
 
 	// Verify parent directory exists
-	dir := filepath.Dir(filePath)
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		t.Errorf("Parent directory does not exist: %s", dir)
+	parentDir := filepath.Dir(filePath)
+	if _, err := os.Stat(parentDir); os.IsNotExist(err) {
+		t.Errorf("Parent directory does not exist: %s", parentDir)
+	}
+
+	if !strings.HasPrefix(filePath, override) {
+		t.Errorf("Expected file path to be inside override dir %s, got %s", override, filePath)
 	}
 }
 
 func TestGetResultsDir(t *testing.T) {
+	setDataDirOverride(t)
 	resultsDir, err := getResultsDir()
 	if err != nil {
 		t.Fatalf("getResultsDir() failed: %v", err)
@@ -141,6 +184,7 @@ func TestMigrateEngagementsFile_NonExistent(t *testing.T) {
 }
 
 func TestGetEngagementsFilePath_Migration(t *testing.T) {
+	setDataDirOverride(t)
 	// This test is complex because it would need to mock the current directory
 	// For now, we just verify the function doesn't error
 	filePath, err := getEngagementsFilePath()
@@ -154,6 +198,7 @@ func TestGetEngagementsFilePath_Migration(t *testing.T) {
 }
 
 func TestDataDirCreation(t *testing.T) {
+	setDataDirOverride(t)
 	// Get data dir (which creates it)
 	dataDir, err := getDataDir()
 	if err != nil {
@@ -180,6 +225,7 @@ func TestDataDirCreation(t *testing.T) {
 }
 
 func TestGetDataDir_PermissionDenied(t *testing.T) {
+	clearDataDirEnv(t)
 	if runtime.GOOS == "windows" {
 		t.Skip("permission bits behave differently on Windows")
 	}
@@ -198,6 +244,7 @@ func TestGetDataDir_PermissionDenied(t *testing.T) {
 }
 
 func TestGetResultsDir_PermissionDenied(t *testing.T) {
+	clearDataDirEnv(t)
 	if runtime.GOOS == "windows" {
 		t.Skip("permission bits behave differently on Windows")
 	}

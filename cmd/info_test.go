@@ -22,7 +22,15 @@ func setupTestAppContext() func() {
 	}
 }
 
+func useTempDataDir(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv(dataDirEnvVar, dir)
+	return dir
+}
+
 func TestInfoCommand(t *testing.T) {
+	useTempDataDir(t)
 	defer setupTestAppContext()()
 
 	// Capture output
@@ -64,6 +72,7 @@ func TestInfoCommand(t *testing.T) {
 }
 
 func TestInfoCommand_ShowsDataDirectory(t *testing.T) {
+	useTempDataDir(t)
 	defer setupTestAppContext()()
 
 	// Get expected data directory
@@ -92,6 +101,7 @@ func TestInfoCommand_ShowsDataDirectory(t *testing.T) {
 }
 
 func TestInfoCommand_ShowsEngagementsPath(t *testing.T) {
+	useTempDataDir(t)
 	defer setupTestAppContext()()
 
 	// Get expected engagements path
@@ -120,6 +130,7 @@ func TestInfoCommand_ShowsEngagementsPath(t *testing.T) {
 }
 
 func TestInfoCommand_ShowsResultsDirectory(t *testing.T) {
+	useTempDataDir(t)
 	defer setupTestAppContext()()
 
 	// Get expected results directory from appContext (which overrides the default)
@@ -145,6 +156,7 @@ func TestInfoCommand_ShowsResultsDirectory(t *testing.T) {
 }
 
 func TestInfoCommand_ShowsFileExistence(t *testing.T) {
+	useTempDataDir(t)
 	defer setupTestAppContext()()
 
 	// Create test engagements file

@@ -5,14 +5,21 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	consts "github.com/khanhnv2901/seca-cli/internal/constants"
 	"github.com/khanhnv2901/seca-cli/internal/security"
 )
 
+const dataDirEnvVar = "SECA_DATA_DIR"
+
 // getDataDir returns the appropriate data directory for the current OS
 // following XDG Base Directory specification on Linux/Unix
 func getDataDir() (string, error) {
+	if override := strings.TrimSpace(os.Getenv(dataDirEnvVar)); override != "" {
+		return ensureDataDirExists(override)
+	}
+
 	var baseDir string
 
 	switch runtime.GOOS {
@@ -50,12 +57,18 @@ func getDataDir() (string, error) {
 		}
 	}
 
-	// Create directory if it doesn't exist
-	if err := os.MkdirAll(baseDir, consts.DefaultDirPerm); err != nil {
+	return ensureDataDirExists(baseDir)
+}
+
+func ensureDataDirExists(path string) (string, error) {
+	resolved, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("resolve data directory: %w", err)
+	}
+	if err := os.MkdirAll(resolved, consts.DefaultDirPerm); err != nil {
 		return "", fmt.Errorf("failed to create data directory: %w", err)
 	}
-
-	return baseDir, nil
+	return resolved, nil
 }
 
 // getEngagementsFilePath returns the path to engagements.json

@@ -186,7 +186,8 @@ func TestGenerateHTMLReport(t *testing.T) {
 		},
 	}
 
-	report, err := generateHTMLReport(buildTemplateData(output, nil, "%.1f", nil))
+	data := buildTemplateData(output, nil, "%.1f", nil)
+	report, err := generateHTMLReport(data)
 	if err != nil {
 		t.Fatalf("Failed to generate HTML report: %v", err)
 	}
@@ -217,65 +218,25 @@ func TestGenerateHTMLReport(t *testing.T) {
 		t.Error("Expected CSS styles in HTML report")
 	}
 
-	// Verify title
-	if !strings.Contains(report, "<title>Engagement Report: Test Engagement</title>") {
-		t.Error("Expected title tag with engagement name")
+	expectedTitle := "<title>Security Scan Report - https://example.com</title>"
+	if !strings.Contains(report, expectedTitle) {
+		t.Errorf("Expected title %q", expectedTitle)
 	}
 
-	// Verify metadata is present
-	if !strings.Contains(report, "Test Engagement") {
-		t.Error("Expected engagement name in HTML report")
+	if !strings.Contains(report, "Scan Date") {
+		t.Error("Expected scan date metadata card")
 	}
 
-	if !strings.Contains(report, "Security Check Catalog") {
-		t.Error("Expected Security Check Catalog section in HTML report")
+	if !strings.Contains(report, "Scan URL") {
+		t.Error("Expected scan URL metadata card")
 	}
 
-	if !strings.Contains(report, "Frame Security Policy (X-Frame-Options)") {
-		t.Error("Expected catalog entry in HTML report")
+	if !strings.Contains(report, "Status") {
+		t.Error("Expected status metadata card")
 	}
 
-	if !strings.Contains(report, "test-operator") {
-		t.Error("Expected operator name in HTML report")
-	}
-
-	if !strings.Contains(report, "abc123def456") {
-		t.Error("Expected audit hash in HTML report")
-	}
-
-	// Verify table structure
-	if !strings.Contains(report, "<table>") {
-		t.Error("Expected table in HTML report")
-	}
-
-	if !strings.Contains(report, "<th>Target</th>") {
-		t.Error("Expected table header in HTML report")
-	}
-
-	if !strings.Contains(report, "https://example.com") {
-		t.Error("Expected target URL in HTML report")
-	}
-
-	// Verify summary cards
-	if !strings.Contains(report, "summary-card") {
-		t.Error("Expected summary cards in HTML report")
-	}
-
-	if !strings.Contains(report, "Successful") {
-		t.Error("Expected success card in HTML report")
-	}
-
-	if !strings.Contains(report, "Failed") {
-		t.Error("Expected failure card in HTML report")
-	}
-
-	// Verify status classes
-	if !strings.Contains(report, "status-ok") {
-		t.Error("Expected status-ok class for successful checks")
-	}
-
-	if !strings.Contains(report, "status-error") {
-		t.Error("Expected status-error class for failed checks")
+	if !strings.Contains(report, "No vulnerabilities found") {
+		t.Error("Expected empty-state message when no findings are present")
 	}
 }
 
@@ -401,12 +362,16 @@ func TestGenerateHTMLReport_EmptyResults(t *testing.T) {
 		t.Error("Expected non-empty report even with no results")
 	}
 
-	if !strings.Contains(report, "Empty Test") {
-		t.Error("Expected engagement name in report")
-	}
-
 	if !strings.Contains(report, "<!DOCTYPE html>") {
 		t.Error("Expected valid HTML structure")
+	}
+
+	if !strings.Contains(report, "Security Scan Report - Empty Test") {
+		t.Error("Expected fallback scan label when no targets are present")
+	}
+
+	if !strings.Contains(report, "No vulnerabilities found") {
+		t.Error("Expected empty-state message when there are no findings")
 	}
 }
 
@@ -422,8 +387,24 @@ func TestGenerateMarkdownReport_SummaryStatistics(t *testing.T) {
 			TotalTargets:   4,
 		},
 		Results: []checker.CheckResult{
-			{Target: "https://example1.com", Status: "ok"},
-			{Target: "https://example2.com", Status: "ok"},
+			{
+				Target: "https://example1.com",
+				Status: "ok",
+				SecurityHeaders: &checker.SecurityHeadersResult{
+					Headers: map[string]checker.HeaderStatus{
+						"Content-Security-Policy": {Present: false},
+					},
+				},
+			},
+			{
+				Target: "https://example2.com",
+				Status: "ok",
+				SecurityHeaders: &checker.SecurityHeadersResult{
+					Headers: map[string]checker.HeaderStatus{
+						"Strict-Transport-Security": {Present: false},
+					},
+				},
+			},
 			{Target: "https://example3.com", Status: "ok"},
 			{Target: "https://example4.com", Status: "error"},
 		},
@@ -460,29 +441,49 @@ func TestGenerateHTMLReport_SummaryStatistics(t *testing.T) {
 			TotalTargets:   4,
 		},
 		Results: []checker.CheckResult{
-			{Target: "https://example1.com", Status: "ok"},
-			{Target: "https://example2.com", Status: "ok"},
+			{
+				Target: "https://example1.com",
+				Status: "ok",
+				SecurityHeaders: &checker.SecurityHeadersResult{
+					Headers: map[string]checker.HeaderStatus{
+						"Content-Security-Policy": {Present: false},
+					},
+				},
+			},
+			{
+				Target: "https://example2.com",
+				Status: "ok",
+				SecurityHeaders: &checker.SecurityHeadersResult{
+					Headers: map[string]checker.HeaderStatus{
+						"Strict-Transport-Security": {Present: false},
+					},
+				},
+			},
 			{Target: "https://example3.com", Status: "ok"},
 			{Target: "https://example4.com", Status: "error"},
 		},
 	}
 
-	report, err := generateHTMLReport(buildTemplateData(output, nil, "%.1f", nil))
+	data := buildTemplateData(output, nil, "%.1f", nil)
+	if len(data.Vulnerabilities) == 0 {
+		t.Fatalf("expected vulnerabilities in template data, summary: %+v", data.Summary)
+	}
+
+	report, err := generateHTMLReport(data)
 	if err != nil {
 		t.Fatalf("Failed to generate HTML report: %v", err)
 	}
 
-	// Should have 3 successful, 1 failed, 75% success rate
-	if !strings.Contains(report, ">3<") {
-		t.Error("Expected 3 successful results in HTML")
+	if !strings.Contains(report, "Critical: 1") {
+		t.Error("Expected critical vulnerability count in summary")
 	}
 
-	if !strings.Contains(report, ">1<") {
-		t.Error("Expected 1 failed result in HTML")
+	if !strings.Contains(report, "Medium: 0") {
+		t.Error("Expected medium vulnerability count in summary")
 	}
 
-	if !strings.Contains(report, "75.0%") {
-		t.Error("Expected 75% success rate in HTML")
+	if !strings.Contains(report, "Content Security Policy (CSP)") {
+		t.Error("Expected vulnerability details to be rendered")
 	}
 }
 
@@ -527,13 +528,7 @@ func TestGenerateHTMLReport_SpecialCharactersEscaping(t *testing.T) {
 			CompleteAt:     time.Now(),
 			TotalTargets:   1,
 		},
-		Results: []checker.CheckResult{
-			{
-				Target: "https://example.com",
-				Status: "ok",
-				Notes:  "Test & Notes",
-			},
-		},
+		Results: []checker.CheckResult{},
 	}
 
 	report, err := generateHTMLReport(buildTemplateData(output, nil, "%.1f", nil))
@@ -541,10 +536,8 @@ func TestGenerateHTMLReport_SpecialCharactersEscaping(t *testing.T) {
 		t.Fatalf("Failed to generate HTML report: %v", err)
 	}
 
-	// Note: The current implementation doesn't escape HTML characters
-	// This test documents that behavior. In production, you might want to add HTML escaping.
-	if report == "" {
-		t.Error("Expected non-empty report")
+	if !strings.Contains(report, "Security Scan Report - Test &amp; Special &lt;Characters&gt;") {
+		t.Error("Expected HTML escaping of special characters in title")
 	}
 }
 

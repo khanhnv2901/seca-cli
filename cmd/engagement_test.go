@@ -14,6 +14,8 @@ import (
 // Helper function to backup and restore engagements file
 // Note: This uses testutil.SetupEngagementsFile internally
 func setupTestEngagements(t *testing.T) func() {
+	t.Helper()
+	t.Setenv(dataDirEnvVar, t.TempDir())
 	return testutil.SetupEngagementsFile(t, getEngagementsFilePath)
 }
 
