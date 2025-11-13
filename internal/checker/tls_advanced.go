@@ -50,7 +50,7 @@ func CheckMixedContent(htmlContent, pageURL string) *MixedContentCheck {
 	stylePattern2 := regexp.MustCompile(`<link[^>]+rel=['"]?stylesheet['"]?[^>]*href=['"]?(http://[^'"\s>]+)['"]?`)
 	styles2 := stylePattern2.FindAllStringSubmatch(htmlContent, -1)
 	for _, match := range styles2 {
-		if len(match) > 1 && !contains(check.MixedContentURLs, match[1]) {
+		if len(match) > 1 && !containsURL(check.MixedContentURLs, match[1]) {
 			check.MixedContentURLs = append(check.MixedContentURLs, match[1])
 			check.InsecureStyles++
 		}
@@ -140,8 +140,8 @@ func CheckOCSPStapling(connState *tls.ConnectionState) bool {
 	return false
 }
 
-// contains checks if a string slice contains a specific string
-func contains(slice []string, item string) bool {
+// containsURL checks if a string slice contains a specific URL string
+func containsURL(slice []string, item string) bool {
 	for _, s := range slice {
 		if s == item {
 			return true

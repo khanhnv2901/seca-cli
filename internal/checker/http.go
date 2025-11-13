@@ -183,6 +183,32 @@ func (h *HTTPChecker) Check(ctx context.Context, target string) (result CheckRes
 				result.ThirdPartyScripts = scripts
 				appendNote(&result, fmt.Sprintf("%d third-party script(s) detected", len(scripts)))
 			}
+
+			// Check for mixed content vulnerabilities on HTTPS pages
+			if resp.TLS != nil && len(bodySnippet) > 0 {
+				mixedContentCheck := CheckMixedContent(string(bodySnippet), u)
+				if mixedContentCheck != nil && mixedContentCheck.HasMixedContent {
+					// Add to TLS compliance result
+					if result.TLSCompliance != nil {
+						result.TLSCompliance.MixedContent = mixedContentCheck
+						summary := AnalyzeMixedContentSummary(mixedContentCheck)
+						appendNote(&result, summary+" ("+mixedContentCheck.Severity+" severity)")
+
+						// Add to TLS compliance issues
+						if mixedContentCheck.Severity == "critical" {
+							issue := ComplianceIssue{
+								Standard:    "OWASP ASVS 9.2.5",
+								Requirement: "9.2.5",
+								Severity:    mixedContentCheck.Severity,
+								Description: summary,
+								Remediation: mixedContentCheck.Recommendation,
+							}
+							result.TLSCompliance.Issues = append(result.TLSCompliance.Issues, issue)
+							result.TLSCompliance.Compliant = false
+						}
+					}
+				}
+			}
 		}
 	}
 

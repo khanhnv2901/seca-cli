@@ -26,5 +26,13 @@
 //   - Banner grabbing for service identification
 //   - Risk-based recommendations (critical/high/medium/low/info)
 //
+// Advanced TLS Checks:
+//
+//   TLS compliance analysis has been enhanced with:
+//   - Mixed Content Detection: Identifies HTTP resources on HTTPS pages
+//     (scripts, stylesheets, images, media, iframes) with severity classification
+//   - OCSP Stapling: Verifies if server supports OCSP stapling for improved
+//     certificate revocation checking performance and privacy (OWASP ASVS 9.2.4)
+//
 package checker
 
