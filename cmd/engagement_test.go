@@ -231,6 +231,122 @@ func TestEngagement_MultipleEngagements(t *testing.T) {
 	}
 }
 
+func TestValidateURLScope(t *testing.T) {
+	valid := []string{
+		"https://example.com",
+		"http://example.com/login",
+		"https://127.0.0.1",
+	}
+	for _, raw := range valid {
+		if err := validateURLScope(raw); err != nil {
+			t.Fatalf("expected %s to be valid, got %v", raw, err)
+		}
+	}
+
+	invalid := []string{
+		"ftp://example.com",
+		"https://",
+		"http://?foo=bar",
+		"https://exa mple.com",
+	}
+	for _, raw := range invalid {
+		if err := validateURLScope(raw); err == nil {
+			t.Fatalf("expected %s to be invalid", raw)
+		}
+	}
+}
+
+func TestIsValidHostname(t *testing.T) {
+	valid := []string{
+		"example.com",
+		"sub.domain-example.com",
+		"localhost",
+		"xn--bcher-kva.example",
+	}
+	for _, host := range valid {
+		if !isValidHostname(host) {
+			t.Fatalf("expected %s to be valid", host)
+		}
+	}
+
+	invalid := []string{
+		"",
+		"-bad.example.com",
+		"bad-.example.com",
+		"toolong" + strings.Repeat("a", 250) + ".com",
+		"with space.com",
+		"bad_label!.com",
+	}
+	for _, host := range invalid {
+		if isValidHostname(host) {
+			t.Fatalf("expected %s to be invalid", host)
+		}
+	}
+}
+
+func TestIsValidHostOrIP(t *testing.T) {
+	if !isValidHostOrIP("10.0.0.1") {
+		t.Fatal("expected IPv4 to be valid")
+	}
+	if !isValidHostOrIP("example.com") {
+		t.Fatal("expected hostname to be valid")
+	}
+	if isValidHostOrIP("") {
+		t.Fatal("expected empty host to be invalid")
+	}
+}
+
+func TestValidateScopeEntry(t *testing.T) {
+	valid := []string{
+		"example.com",
+		"sub.domain.com",
+		"192.168.0.1",
+	}
+	for _, entry := range valid {
+		if err := validateScopeEntry(entry); err != nil {
+			t.Fatalf("expected %s to be valid, got %v", entry, err)
+		}
+	}
+
+	invalid := []string{
+		"http://", // missing host
+		"bad host",
+		"ftp://example.com",
+	}
+	for _, entry := range invalid {
+		if err := validateScopeEntry(entry); err == nil {
+			t.Fatalf("expected %s to be invalid", entry)
+		}
+	}
+}
+
+func TestFindEngagementByID(t *testing.T) {
+	cleanup := setupTestEngagements(t)
+	defer cleanup()
+
+	list := []Engagement{
+		{ID: "abc", Name: "First"},
+		{ID: "xyz", Name: "Second"},
+	}
+	saveEngagements(list)
+
+	eng, err := findEngagementByID("xyz")
+	if err != nil {
+		t.Fatalf("expected engagement to be found, got %v", err)
+	}
+	if eng.Name != "Second" {
+		t.Fatalf("expected Second, got %s", eng.Name)
+	}
+
+	if _, err := findEngagementByID(""); err == nil {
+		t.Fatal("expected error for missing id")
+	}
+
+	if _, err := findEngagementByID("missing"); err == nil {
+		t.Fatal("expected error for missing engagement")
+	}
+}
+
 func TestEngagement_ScopeHandling(t *testing.T) {
 	cleanup := setupTestEngagements(t)
 	defer cleanup()
