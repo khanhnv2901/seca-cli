@@ -85,7 +85,7 @@ func TestEngagementService_AddScopeEntries(t *testing.T) {
 }
 
 func TestEngagement_ValidData(t *testing.T) {
-	engagement := Engagement{
+	engagement := engagementDTO{
 		ID:        "123",
 		Name:      "Test",
 		Owner:     "owner@example.com",
@@ -111,7 +111,7 @@ func TestEngagement_ValidData(t *testing.T) {
 }
 
 func TestEngagement_JSONMarshaling(t *testing.T) {
-	engagement := Engagement{
+	engagement := engagementDTO{
 		ID:        "456",
 		Name:      "JSON Test",
 		Owner:     "json@example.com",
@@ -128,7 +128,7 @@ func TestEngagement_JSONMarshaling(t *testing.T) {
 	}
 
 	// Unmarshal back
-	var decoded Engagement
+	var decoded engagementDTO
 	err = json.Unmarshal(data, &decoded)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal: %v", err)
@@ -233,7 +233,7 @@ func TestValidateScopeEntry(t *testing.T) {
 }
 
 func TestEngagement_ROEAgreeValidation(t *testing.T) {
-	engagement := Engagement{
+	engagement := engagementDTO{
 		ID:        "roe-test",
 		Name:      "ROE Test",
 		Owner:     "test@example.com",
