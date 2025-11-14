@@ -415,7 +415,7 @@ func (n *NetworkChecker) scanPorts(ctx context.Context, host string) []PortInfo 
 			select {
 			case portChan <- port:
 			case <-ctx.Done():
-				break
+				return
 			}
 		}
 		close(portChan)

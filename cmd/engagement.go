@@ -15,18 +15,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type Engagement struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Owner     string    `json:"owner"`
-	Start     time.Time `json:"start,omitempty"`
-	End       time.Time `json:"end,omitempty"`
-	Scope     []string  `json:"scope,omitempty"` // list of allowed hosts/urls
-	ROE       string    `json:"roe,omitempty"`   // rules of engagement text
-	ROEAgree  bool      `json:"roe_agree"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
 type engagementDTO struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
