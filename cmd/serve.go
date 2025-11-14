@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/khanhnv2901/seca-cli/internal/infrastructure/api"
+	sharedErrors "github.com/khanhnv2901/seca-cli/internal/shared/errors"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 )
@@ -56,7 +57,7 @@ var serveCmd = &cobra.Command{
 			Results:        &resultsAPIService{appCtx: appCtx},
 			Telemetry:      &telemetryAPIService{appCtx: appCtx},
 			Health:         &healthAPIService{appCtx: appCtx},
-			Jobs:           &jobAPIService{manager: jobManager, runner: runner},
+			Jobs:           &jobAPIService{manager: jobManager, runner: runner, appCtx: appCtx},
 			AuthToken:      authToken,
 			TelemetryLimit: telemetryLimit,
 			Logger:         logger,
@@ -309,6 +310,7 @@ func convertEngagement(e Engagement) api.Engagement {
 type jobAPIService struct {
 	manager *api.JobManager
 	runner  jobRunner
+	appCtx  *AppContext
 }
 
 type jobRunner interface {
@@ -329,8 +331,11 @@ func (s *jobAPIService) StartJob(ctx context.Context, req api.JobRequest) (*api.
 	if jobType != "http" {
 		return nil, fmt.Errorf("unsupported job type %s", req.Type)
 	}
-	if _, err := findEngagementByID(req.EngagementID); err != nil {
-		return nil, err
+	if _, err := s.appCtx.Services.EngagementService.GetEngagement(ctx, req.EngagementID); err != nil {
+		if errors.Is(err, sharedErrors.ErrEngagementNotFound) {
+			return nil, fmt.Errorf("engagement %s not found", req.EngagementID)
+		}
+		return nil, fmt.Errorf("failed to get engagement: %w", err)
 	}
 	job := s.manager.CreateJob(jobType, req.EngagementID)
 	go s.execute(job, req)

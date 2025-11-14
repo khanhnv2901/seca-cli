@@ -1,16 +1,17 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
-	consts "github.com/khanhnv2901/seca-cli/internal/shared/constants"
+	"github.com/khanhnv2901/seca-cli/internal/domain/engagement"
+	sharedErrors "github.com/khanhnv2901/seca-cli/internal/shared/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -26,98 +27,231 @@ type Engagement struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type engagementDTO struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Owner     string    `json:"owner"`
+	Start     time.Time `json:"start,omitempty"`
+	End       time.Time `json:"end,omitempty"`
+	Scope     []string  `json:"scope,omitempty"`
+	ROE       string    `json:"roe,omitempty"`
+	ROEAgree  bool      `json:"roe_agree"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func engagementToDTO(eng *engagement.Engagement) engagementDTO {
+	return engagementDTO{
+		ID:        eng.ID(),
+		Name:      eng.Name(),
+		Owner:     eng.Owner(),
+		Start:     eng.Start(),
+		End:       eng.End(),
+		Scope:     eng.Scope(),
+		ROE:       eng.ROE(),
+		ROEAgree:  eng.ROEAgreed(),
+		CreatedAt: eng.CreatedAt(),
+	}
+}
+
 var engagementCmd = &cobra.Command{
 	Use:   "engagement",
 	Short: "Manage engagements (create/list/add-scope...)",
 }
 
-// Old command implementations removed - now using DDD-based commands from engagement_ddd.go
-// The old engagementCreateCmd, engagementListCmd, engagementViewCmd, engagementAddScopeCmd,
-// engagementRemoveScopeCmd, and engagementDeleteCmd have been replaced with DDD versions.
+var engagementCreateCmd = &cobra.Command{
+	Use:   "create",
+	Short: "Create a new engagement (requires ROE acceptance)",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := context.Background()
+		appCtx := getAppContext(cmd)
+
+		name, _ := cmd.Flags().GetString("name")
+		owner, _ := cmd.Flags().GetString("owner")
+		roe, _ := cmd.Flags().GetString("roe")
+		roeAgree, _ := cmd.Flags().GetBool("roe-agree")
+		scopeFlag, _ := cmd.Flags().GetStringSlice("scope")
+
+		if name == "" || owner == "" {
+			return errors.New("name and owner are required")
+		}
+
+		if !roeAgree {
+			return errors.New("ROE must be agreed (--roe-agree)")
+		}
+
+		eng, err := appCtx.Services.EngagementService.CreateEngagement(ctx, name, owner, roe, scopeFlag)
+		if err != nil {
+			return fmt.Errorf("failed to create engagement: %w", err)
+		}
+
+		if err := appCtx.Services.EngagementService.AcknowledgeROE(ctx, eng.ID()); err != nil {
+			return fmt.Errorf("failed to acknowledge ROE: %w", err)
+		}
+
+		fmt.Printf("%s engagement %s (id=%s)\n", colorSuccess("Created"), name, eng.ID())
+		return nil
+	},
+}
+
+var engagementListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List all engagements",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := context.Background()
+		appCtx := getAppContext(cmd)
+
+		engagements, err := appCtx.Services.EngagementService.ListEngagements(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to list engagements: %w", err)
+		}
+
+		dtos := make([]engagementDTO, len(engagements))
+		for i, eng := range engagements {
+			dtos[i] = engagementToDTO(eng)
+		}
+
+		b, _ := json.MarshalIndent(dtos, jsonPrefix, jsonIndent)
+		fmt.Println(string(b))
+		return nil
+	},
+}
+
+var engagementViewCmd = &cobra.Command{
+	Use:   "view",
+	Short: "View a single engagement",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := context.Background()
+		appCtx := getAppContext(cmd)
+
+		id, _ := cmd.Flags().GetString("id")
+		if id == "" {
+			return fmt.Errorf("--id is required")
+		}
+
+		eng, err := appCtx.Services.EngagementService.GetEngagement(ctx, id)
+		if err != nil {
+			if errors.Is(err, sharedErrors.ErrEngagementNotFound) {
+				return fmt.Errorf("engagement %s not found", id)
+			}
+			return fmt.Errorf("failed to get engagement: %w", err)
+		}
+
+		dto := engagementToDTO(eng)
+		b, _ := json.MarshalIndent(dto, jsonPrefix, jsonIndent)
+		fmt.Println(string(b))
+		return nil
+	},
+}
+
+var engagementAddScopeCmd = &cobra.Command{
+	Use:   "add-scope",
+	Short: "Add scope entries (URLs/hosts) to an engagement",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := context.Background()
+		appCtx := getAppContext(cmd)
+
+		id, _ := cmd.Flags().GetString("id")
+		if id == "" {
+			return fmt.Errorf("--id is required")
+		}
+
+		scopeEntries, _ := cmd.Flags().GetStringSlice("scope")
+		if len(scopeEntries) == 0 {
+			return fmt.Errorf("--scope is required (one or more entries to add)")
+		}
+
+		normalized, err := normalizeScopeEntries(id, scopeEntries)
+		if err != nil {
+			return fmt.Errorf("invalid scope entries: %w", err)
+		}
+
+		if err := appCtx.Services.EngagementService.AddToScope(ctx, id, normalized); err != nil {
+			return fmt.Errorf("failed to add scope: %w", err)
+		}
+
+		fmt.Printf("%s added %d scope entries to engagement %s\n", colorSuccess("Success:"), len(normalized), id)
+		return nil
+	},
+}
+
+var engagementRemoveScopeCmd = &cobra.Command{
+	Use:   "remove-scope",
+	Short: "Remove scope entries (URLs/hosts) from an engagement",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := context.Background()
+		appCtx := getAppContext(cmd)
+
+		id, _ := cmd.Flags().GetString("id")
+		if id == "" {
+			return fmt.Errorf("--id is required")
+		}
+
+		domains, _ := cmd.Flags().GetStringSlice("domain")
+		if len(domains) == 0 {
+			return fmt.Errorf("--domain is required (one or more domains to remove)")
+		}
+
+		if err := appCtx.Services.EngagementService.RemoveFromScope(ctx, id, domains); err != nil {
+			return fmt.Errorf("failed to remove scope: %w", err)
+		}
+
+		fmt.Printf("%s removed %d scope entries from engagement %s\n", colorSuccess("Success:"), len(domains), id)
+		return nil
+	},
+}
+
+var engagementDeleteCmd = &cobra.Command{
+	Use:   "delete",
+	Short: "Delete an engagement",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := context.Background()
+		appCtx := getAppContext(cmd)
+
+		id, _ := cmd.Flags().GetString("id")
+		confirm, _ := cmd.Flags().GetBool("confirm")
+
+		if id == "" {
+			return fmt.Errorf("--id is required")
+		}
+
+		if !confirm {
+			return errors.New("--confirm is required to delete the engagement")
+		}
+
+		if err := appCtx.Services.EngagementService.DeleteEngagement(ctx, id); err != nil {
+			return fmt.Errorf("failed to delete engagement: %w", err)
+		}
+
+		fmt.Printf("%s engagement %s deleted\n", colorSuccess("Success:"), id)
+		return nil
+	},
+}
 
 func init() {
 	// Use DDD-based commands instead of old ones
-	engagementCmd.AddCommand(engagementCreateCmdDDD)
-	engagementCmd.AddCommand(engagementListCmdDDD)
-	engagementCmd.AddCommand(engagementViewCmdDDD)
-	engagementCmd.AddCommand(engagementAddScopeCmdDDD)
-	engagementCmd.AddCommand(engagementRemoveScopeCmdDDD)
-	engagementCmd.AddCommand(engagementDeleteCmdDDD)
-}
+	engagementCmd.AddCommand(engagementCreateCmd)
+	engagementCmd.AddCommand(engagementListCmd)
+	engagementCmd.AddCommand(engagementViewCmd)
+	engagementCmd.AddCommand(engagementAddScopeCmd)
+	engagementCmd.AddCommand(engagementRemoveScopeCmd)
+	engagementCmd.AddCommand(engagementDeleteCmd)
 
-// ============================================================================
-// Legacy Helper Functions
-// ============================================================================
-// These functions are kept for backward compatibility with tests, TUI, and
-// parts of serve.go that haven't been fully migrated yet.
-// TODO: Migrate remaining usages to use application services via AppContext
-// ============================================================================
+	engagementCreateCmd.Flags().String("name", "", "Engagement name")
+	engagementCreateCmd.Flags().String("owner", "", "Engagement owner")
+	engagementCreateCmd.Flags().String("roe", "", "Rules of Engagement")
+	engagementCreateCmd.Flags().Bool("roe-agree", false, "Acknowledge ROE")
+	engagementCreateCmd.Flags().StringSlice("scope", nil, "Initial scope entries")
 
-// loadEngagements loads all engagements from the JSON file.
-// DEPRECATED: Use appCtx.Services.EngagementService.ListEngagements() instead.
-// Still used by: engagement_test.go, tui.go, check.go
-func loadEngagements() []Engagement {
-	filePath, err := getEngagementsFilePath()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error getting engagements file path: %v\n", err)
-		return []Engagement{}
-	}
+	engagementViewCmd.Flags().String("id", "", "Engagement ID")
 
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		return []Engagement{}
-	}
+	engagementAddScopeCmd.Flags().String("id", "", "Engagement ID")
+	engagementAddScopeCmd.Flags().StringSlice("scope", nil, "Scope entries to add")
 
-	b, err := os.ReadFile(filePath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading engagements file: %v\n", err)
-		return []Engagement{}
-	}
+	engagementRemoveScopeCmd.Flags().String("id", "", "Engagement ID")
+	engagementRemoveScopeCmd.Flags().StringSlice("domain", nil, "Domains to remove")
 
-	var out []Engagement
-	if err := json.Unmarshal(b, &out); err != nil {
-		fmt.Fprintf(os.Stderr, "Error parsing engagements file: %v\n", err)
-		return []Engagement{}
-	}
-
-	return out
-}
-
-// saveEngagements saves engagements to the JSON file.
-// DEPRECATED: Use appCtx.Services.EngagementService methods instead.
-// Still used by: engagement_test.go, info_test.go
-func saveEngagements(list []Engagement) {
-	filePath, err := getEngagementsFilePath()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error getting engagements file path: %v\n", err)
-		return
-	}
-
-	b, err := json.MarshalIndent(list, jsonPrefix, jsonIndent)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error marshaling engagements: %v\n", err)
-		return
-	}
-
-	if err := os.WriteFile(filePath, b, consts.DefaultFilePerm); err != nil {
-		fmt.Fprintf(os.Stderr, "Error writing engagements file: %v\n", err)
-	}
-}
-
-// findEngagementByID finds an engagement by ID.
-// DEPRECATED: Use appCtx.Services.EngagementService.GetEngagement() instead.
-// Still used by: serve.go, engagement_test.go
-func findEngagementByID(id string) (*Engagement, error) {
-	if id == "" {
-		return nil, fmt.Errorf("--id is required")
-	}
-	list := loadEngagements()
-	for i := range list {
-		if list[i].ID == id {
-			eng := list[i]
-			return &eng, nil
-		}
-	}
-	return nil, &EngagementNotFoundError{ID: id}
+	engagementDeleteCmd.Flags().String("id", "", "Engagement ID")
+	engagementDeleteCmd.Flags().Bool("confirm", false, "Confirm deletion")
 }
 
 var allowedScopeSchemes = map[string]struct{}{
@@ -132,7 +266,7 @@ var allowedScopeSchemes = map[string]struct{}{
 // ============================================================================
 
 // normalizeScopeEntries validates and normalizes scope entries.
-// Used by: engagement_ddd.go (DDD commands), tui.go
+// Used by: engagement commands and tui.go
 func normalizeScopeEntries(scopeID string, entries []string) ([]string, error) {
 	out := make([]string, len(entries))
 	for i, entry := range entries {
