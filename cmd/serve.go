@@ -15,7 +15,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/khanhnv2901/seca-cli/internal/api"
+	"github.com/khanhnv2901/seca-cli/internal/infrastructure/api"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 )
@@ -50,6 +50,7 @@ var serveCmd = &cobra.Command{
 			return err
 		}
 
+		// Use DDD application services for the API
 		server := api.NewServer(api.Config{
 			Engagements:    &engagementAPIService{appCtx: appCtx},
 			Results:        &resultsAPIService{appCtx: appCtx},
@@ -131,49 +132,88 @@ type engagementAPIService struct {
 }
 
 func (s *engagementAPIService) ListEngagements(ctx context.Context) ([]api.Engagement, error) {
-	items := loadEngagements()
-	resp := make([]api.Engagement, 0, len(items))
-	for _, e := range items {
-		resp = append(resp, convertEngagement(e))
+	// Use DDD EngagementService instead of direct file I/O
+	engagements, err := s.appCtx.Services.EngagementService.ListEngagements(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list engagements: %w", err)
+	}
+
+	resp := make([]api.Engagement, 0, len(engagements))
+	for _, e := range engagements {
+		resp = append(resp, api.Engagement{
+			ID:        e.ID(),
+			Name:      e.Name(),
+			Owner:     e.Owner(),
+			Scope:     e.Scope(),
+			ROE:       e.ROE(),
+			ROEAgree:  e.ROEAgreed(),
+			CreatedAt: e.CreatedAt(),
+		})
 	}
 	return resp, nil
 }
 
 func (s *engagementAPIService) GetEngagement(ctx context.Context, id string) (*api.Engagement, error) {
-	eng, err := findEngagementByID(id)
+	// Use DDD EngagementService instead of direct file lookup
+	eng, err := s.appCtx.Services.EngagementService.GetEngagement(ctx, id)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get engagement: %w", err)
 	}
-	result := convertEngagement(*eng)
+
+	result := api.Engagement{
+		ID:        eng.ID(),
+		Name:      eng.Name(),
+		Owner:     eng.Owner(),
+		Scope:     eng.Scope(),
+		ROE:       eng.ROE(),
+		ROEAgree:  eng.ROEAgreed(),
+		CreatedAt: eng.CreatedAt(),
+	}
 	return &result, nil
 }
 
 func (s *engagementAPIService) CreateEngagement(ctx context.Context, req api.EngagementCreateRequest) (*api.Engagement, error) {
+	// Validate request
 	if req.Name == "" || req.Owner == "" {
 		return nil, fmt.Errorf("name and owner are required")
 	}
 	if !req.ROEAgree {
 		return nil, fmt.Errorf("roe_agree must be true")
 	}
-	engagement := Engagement{
-		ID:        fmt.Sprintf("%d", time.Now().UnixNano()),
-		Name:      req.Name,
-		Owner:     req.Owner,
-		ROE:       req.ROE,
-		ROEAgree:  req.ROEAgree,
-		CreatedAt: time.Now(),
-	}
+
+	// Normalize scope if provided
+	var scope []string
 	if len(req.Scope) > 0 {
-		normalized, err := normalizeScopeEntries(engagement.ID, req.Scope)
+		// Use a temporary ID for validation
+		tempID := fmt.Sprintf("%d", time.Now().UnixNano())
+		normalized, err := normalizeScopeEntries(tempID, req.Scope)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("invalid scope: %w", err)
 		}
-		engagement.Scope = normalized
+		scope = normalized
 	}
-	list := loadEngagements()
-	list = append(list, engagement)
-	saveEngagements(list)
-	result := convertEngagement(engagement)
+
+	// Use DDD EngagementService to create
+	eng, err := s.appCtx.Services.EngagementService.CreateEngagement(ctx, req.Name, req.Owner, req.ROE, scope)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create engagement: %w", err)
+	}
+
+	// Acknowledge ROE since req.ROEAgree was true
+	if err := s.appCtx.Services.EngagementService.AcknowledgeROE(ctx, eng.ID()); err != nil {
+		return nil, fmt.Errorf("failed to acknowledge ROE: %w", err)
+	}
+
+	// Convert to API response
+	result := api.Engagement{
+		ID:        eng.ID(),
+		Name:      eng.Name(),
+		Owner:     eng.Owner(),
+		Scope:     eng.Scope(),
+		ROE:       eng.ROE(),
+		ROEAgree:  eng.ROEAgreed(),
+		CreatedAt: eng.CreatedAt(),
+	}
 	return &result, nil
 }
 

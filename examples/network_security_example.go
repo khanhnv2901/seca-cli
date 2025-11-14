@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/khanhnv2901/seca-cli/internal/checker"
+	"github.com/khanhnv2901/seca-cli/internal/infrastructure/checker"
 )
 
 func main() {

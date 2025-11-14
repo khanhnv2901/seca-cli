@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	consts "github.com/khanhnv2901/seca-cli/internal/constants"
-	"github.com/khanhnv2901/seca-cli/internal/security"
+	consts "github.com/khanhnv2901/seca-cli/internal/shared/constants"
+	"github.com/khanhnv2901/seca-cli/internal/shared/security"
 )
 
 // validateEngagementID ensures engagement identifiers can't be used for path traversal

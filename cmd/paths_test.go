@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/khanhnv2901/seca-cli/cmd/testutil"
-	consts "github.com/khanhnv2901/seca-cli/internal/constants"
+	consts "github.com/khanhnv2901/seca-cli/internal/shared/constants"
 )
 
 func setDataDirOverride(t *testing.T) string {

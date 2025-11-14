@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -16,8 +15,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/khanhnv2901/seca-cli/internal/checker"
-	consts "github.com/khanhnv2901/seca-cli/internal/constants"
+	"github.com/khanhnv2901/seca-cli/internal/infrastructure/checker"
+	consts "github.com/khanhnv2901/seca-cli/internal/shared/constants"
 	"github.com/spf13/cobra"
 )
 
@@ -46,117 +45,9 @@ var checkCmd = &cobra.Command{
 	Short: "Run safe, authorized checks against scoped targets (no scanning/exploitation)",
 }
 
-var checkHTTPCmd = &cobra.Command{
-	Use:   "http",
-	Short: "Run safe HTTP/TLS checks for an engagement's scope",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return runCheckCommand(cmd, checkConfig{
-			CreateChecker: func(appCtx *AppContext, params checkParams) checker.Checker {
-				runtimeCfg := appCtx.Config.Check
-				return &checker.HTTPChecker{
-					Timeout:    time.Duration(runtimeCfg.TimeoutSecs) * time.Second,
-					CaptureRaw: runtimeCfg.AuditAppendRaw,
-					RawHandler: func(target string, headers http.Header, bodySnippet string) error {
-						return SaveRawCapture(appCtx.ResultsDir, params.ID, target, headers, bodySnippet)
-					},
-				}
-			},
-			CreateAuditFn: func(appCtx *AppContext, params checkParams, chk checker.Checker) func(string, checker.CheckResult, float64) error {
-				return func(target string, result checker.CheckResult, duration float64) error {
-					return AppendAuditRow(
-						appCtx.ResultsDir,
-						params.ID,
-						appCtx.Operator,
-						chk.Name(),
-						target,
-						result.Status,
-						result.HTTPStatus,
-						result.TLSExpiry,
-						result.Notes,
-						result.Error,
-						duration,
-					)
-				}
-			},
-			ResultsFilename:        "http_results.json",
-			TimeoutSecs:            cliConfig.Check.TimeoutSecs,
-			VerificationCmdBuilder: makeVerificationCommand("http_results.json"),
-			SupportsRawCapture:     true,
-			PrintSummary: func(results []checker.CheckResult, resultsPath, auditPath, auditHash, resultsHash string, hashAlgo HashAlgorithm) {
-				fmt.Println(colorSuccess("Run complete."))
-				fmt.Printf("%s %s\n", colorInfo("Results:"), resultsPath)
-				fmt.Printf("%s %s\n", colorInfo("Audit:"), auditPath)
-				fmt.Printf("%s audit: %s\n%s results: %s\n", hashAlgo.DisplayName(), auditHash, hashAlgo.DisplayName(), resultsHash)
-			},
-		})
-	},
-}
-
-var checkDNSCmd = &cobra.Command{
-	Use:   "dns",
-	Short: "Run DNS checks for an engagement's scope",
-	Long: `Perform DNS resolution checks on engagement targets.
-	This command will:
-- Resolve A records (IPv4 addresses)
-- Resolve AAAA records (IPv6 addresses)
-- Check CNAME records
-- Check MX records (mail servers)
-- Check NS records (nameservers)
-- Check TXT records (SPF, DKIM, etc.)
-- Perform reverse DNS lookups (PTR records)
-
-All checks are safe, non-intrusive DNS queries only.`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return runCheckCommand(cmd, checkConfig{
-			CreateChecker: func(appCtx *AppContext, params checkParams) checker.Checker {
-				runtimeCfg := appCtx.Config.Check
-				return &checker.DNSChecker{
-					Timeout:    time.Duration(runtimeCfg.DNS.Timeout) * time.Second,
-					NameServer: runtimeCfg.DNS.Nameservers,
-				}
-			},
-			CreateAuditFn: func(appCtx *AppContext, params checkParams, chk checker.Checker) func(string, checker.CheckResult, float64) error {
-				return func(target string, result checker.CheckResult, duration float64) error {
-					return AppendAuditRow(
-						appCtx.ResultsDir,
-						params.ID,
-						appCtx.Operator,
-						chk.Name(),
-						target,
-						result.Status,
-						0,  // No HTTP status for DNS
-						"", // No TLS expiry for DNS
-						result.Notes,
-						result.Error,
-						duration,
-					)
-				}
-			},
-			ResultsFilename:        "dns_results.json",
-			TimeoutSecs:            cliConfig.Check.DNS.Timeout,
-			VerificationCmdBuilder: makeVerificationCommand("dns_results.json"),
-			SupportsRawCapture:     false,
-			PrintSummary: func(results []checker.CheckResult, resultsPath, auditPath, auditHash, resultsHash string, hashAlgo HashAlgorithm) {
-				// Count successes and errors
-				okCount := 0
-				errorCount := 0
-				for _, r := range results {
-					if r.Status == "ok" {
-						okCount++
-					} else {
-						errorCount++
-					}
-				}
-
-				fmt.Println(colorSuccess("DNS Check complete."))
-				fmt.Printf("%s %s\n", colorInfo("Results:"), resultsPath)
-				fmt.Printf("%s %s\n", colorInfo("Audit:"), auditPath)
-				fmt.Printf("%s audit: %s\n%s results: %s\n", hashAlgo.DisplayName(), auditHash, hashAlgo.DisplayName(), resultsHash)
-				fmt.Printf("Summary: %d OK, %d Errors (out of %d targets)\n", okCount, errorCount, len(results))
-			},
-		})
-	},
-}
+// Old HTTP and DNS command implementations removed - now using DDD-based commands from check_ddd.go
+// The old checkHTTPCmd and checkDNSCmd have been replaced with DDD versions that use
+// CheckOrchestrator and AuditService for better separation of concerns.
 
 var checkNetworkCmd = &cobra.Command{
 	Use:   "network",
@@ -848,20 +739,7 @@ func init() {
 	checkCmd.PersistentFlags().BoolVar(&cliConfig.Check.SecureResults, "secure-results", cliConfig.Check.SecureResults, "Encrypt audit logs with operator GPG key after run")
 	checkCmd.PersistentFlags().IntVar(&cliConfig.Check.RetryCount, "retry", cliConfig.Check.RetryCount, "Number of times to retry failed targets")
 
-	// HTTP-specific flags
-	addCommonCheckFlags(checkHTTPCmd)
-	checkHTTPCmd.Flags().BoolVar(&cliConfig.Check.AuditAppendRaw, "audit-append-raw", cliConfig.Check.AuditAppendRaw, "Save limited raw headers/body for auditing (handle carefully)")
-	checkHTTPCmd.Flags().IntVar(&cliConfig.Check.RetentionDays, "retention-days", cliConfig.Check.RetentionDays, "Retention period (days) for raw captures; required in compliance mode if --audit-append-raw is used")
-	checkHTTPCmd.Flags().BoolVar(&cliConfig.Check.Crawl.Enabled, "crawl", cliConfig.Check.Crawl.Enabled, "Discover same-host links (auto-detects JavaScript/SPA sites)")
-	checkHTTPCmd.Flags().IntVar(&cliConfig.Check.Crawl.MaxDepth, "crawl-depth", cliConfig.Check.Crawl.MaxDepth, "Maximum link depth to follow per target")
-	checkHTTPCmd.Flags().IntVar(&cliConfig.Check.Crawl.MaxPages, "crawl-max-pages", cliConfig.Check.Crawl.MaxPages, "Maximum additional pages to discover per target")
-	checkHTTPCmd.Flags().BoolVar(&cliConfig.Check.Crawl.EnableJS, "crawl-force-js", cliConfig.Check.Crawl.EnableJS, "Force JavaScript crawler for all targets (overrides auto-detection)")
-	checkHTTPCmd.Flags().IntVar(&cliConfig.Check.Crawl.JSWaitTime, "crawl-js-wait", cliConfig.Check.Crawl.JSWaitTime, "Seconds to wait for JavaScript to render (when JS is used)")
-
-	// DNS-specific flags
-	addCommonCheckFlags(checkDNSCmd)
-	checkDNSCmd.Flags().StringSliceVar(&cliConfig.Check.DNS.Nameservers, "nameservers", cliConfig.Check.DNS.Nameservers, "Custom DNS nameservers (e.g., 8.8.8.8:53,1.1.1.1:53)")
-	checkDNSCmd.Flags().IntVar(&cliConfig.Check.DNS.Timeout, "dns-timeout", cliConfig.Check.DNS.Timeout, "DNS query timeout in seconds")
+	// HTTP and DNS command flags are now defined in check_ddd.go alongside the DDD command implementations
 
 	// Network-specific flags
 	addCommonCheckFlags(checkNetworkCmd)
@@ -875,8 +753,9 @@ func init() {
 	checkNetworkCmd.Flags().BoolVar(&cliConfig.Check.Crawl.EnableJS, "crawl-force-js", cliConfig.Check.Crawl.EnableJS, "Force JavaScript crawler for all targets (overrides auto-detection)")
 	checkNetworkCmd.Flags().IntVar(&cliConfig.Check.Crawl.JSWaitTime, "crawl-js-wait", cliConfig.Check.Crawl.JSWaitTime, "Seconds to wait for JavaScript to render (when JS is used)")
 
-	checkCmd.AddCommand(checkHTTPCmd)
-	checkCmd.AddCommand(checkDNSCmd)
-	checkCmd.AddCommand(checkNetworkCmd)
+	// Use DDD-based commands instead of old ones
+	checkCmd.AddCommand(checkHTTPCmdDDD)
+	checkCmd.AddCommand(checkDNSCmdDDD)
+	checkCmd.AddCommand(checkNetworkCmd)  // Keep old network command for now
 	registerPluginCommands()
 }

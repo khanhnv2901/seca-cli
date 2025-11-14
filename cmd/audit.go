@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	consts "github.com/khanhnv2901/seca-cli/internal/constants"
+	consts "github.com/khanhnv2901/seca-cli/internal/shared/constants"
 )
 
 // audit header fields:

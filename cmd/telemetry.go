@@ -7,8 +7,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/khanhnv2901/seca-cli/internal/checker"
-	consts "github.com/khanhnv2901/seca-cli/internal/constants"
+	"github.com/khanhnv2901/seca-cli/internal/infrastructure/checker"
+	consts "github.com/khanhnv2901/seca-cli/internal/shared/constants"
 )
 
 type TelemetryRecord struct {

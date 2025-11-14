@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/khanhnv2901/seca-cli/internal/checker"
+	"github.com/khanhnv2901/seca-cli/internal/infrastructure/checker"
 )
 
 // Tests for CheckResult structure (cmd package uses this from checker package)

@@ -192,7 +192,7 @@ func applyConfigDefaults(cmd *cobra.Command) {
 	}
 
 	if overrides.RetentionDays != nil {
-		applyIntDefault(checkHTTPCmd.Flags(), "retention-days", *overrides.RetentionDays, func(v int) {
+		applyIntDefault(checkHTTPCmdDDD.Flags(), "retention-days", *overrides.RetentionDays, func(v int) {
 			cliConfig.Defaults.RetentionDays = v
 			cliConfig.Check.RetentionDays = v
 		})

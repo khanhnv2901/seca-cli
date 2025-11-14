@@ -5,7 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	consts "github.com/khanhnv2901/seca-cli/internal/constants"
+	"github.com/khanhnv2901/seca-cli/internal/application"
+	consts "github.com/khanhnv2901/seca-cli/internal/shared/constants"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -18,6 +19,7 @@ type AppContext struct {
 	Operator   string
 	ResultsDir string
 	Config     *CLIConfig
+	Services   *application.Container // DDD service container
 }
 
 var cfgFile string
@@ -121,6 +123,18 @@ Documentation:
 
 		appCtx.Logger.Infof("operator=%s results_dir=%s", appCtx.Operator, appCtx.ResultsDir)
 
+		// Initialize DDD services
+		dataDir, err := getDataDir()
+		if err != nil {
+			return fmt.Errorf("failed to get data directory: %w", err)
+		}
+
+		services, err := application.NewContainer(dataDir, appCtx.ResultsDir)
+		if err != nil {
+			return fmt.Errorf("failed to initialize services: %w", err)
+		}
+		appCtx.Services = services
+
 		// Store AppContext in command context for access by subcommands
 		cmd.SetContext(cmd.Context())
 		// Store in command's context using a custom field
@@ -177,6 +191,7 @@ func init() {
 	// add subcommands
 	rootCmd.AddCommand(engagementCmd)
 	rootCmd.AddCommand(checkCmd)
+	rootCmd.AddCommand(auditCmd)
 	rootCmd.AddCommand(reportCmd)
 	rootCmd.AddCommand(tuiCmd)
 	rootCmd.AddCommand(versionCmd)

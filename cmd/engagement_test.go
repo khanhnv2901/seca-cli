@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/khanhnv2901/seca-cli/cmd/testutil"
-	consts "github.com/khanhnv2901/seca-cli/internal/constants"
+	consts "github.com/khanhnv2901/seca-cli/internal/shared/constants"
 )
 
 // Helper function to backup and restore engagements file

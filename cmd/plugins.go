@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/khanhnv2901/seca-cli/internal/checker"
-	"github.com/khanhnv2901/seca-cli/internal/security"
+	"github.com/khanhnv2901/seca-cli/internal/infrastructure/checker"
+	"github.com/khanhnv2901/seca-cli/internal/shared/security"
 	"github.com/spf13/cobra"
 )
 
