@@ -344,3 +344,24 @@ func TestParseHashAlgorithm(t *testing.T) {
 		}
 	}
 }
+
+func TestHashAlgorithmHelpers(t *testing.T) {
+	tests := []struct {
+		algo       HashAlgorithm
+		display    string
+		sumCommand string
+	}{
+		{HashAlgorithmSHA256, "SHA256", "sha256sum"},
+		{HashAlgorithmSHA512, "SHA512", "sha512sum"},
+		{"", "SHA256", "sha256sum"},
+	}
+
+	for _, tt := range tests {
+		if got := tt.algo.DisplayName(); got != tt.display {
+			t.Fatalf("DisplayName() = %s, want %s", got, tt.display)
+		}
+		if got := tt.algo.SumCommand(); got != tt.sumCommand {
+			t.Fatalf("SumCommand() = %s, want %s", got, tt.sumCommand)
+		}
+	}
+}

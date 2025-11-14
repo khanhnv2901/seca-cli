@@ -6,7 +6,32 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/khanhnv2901/seca-cli/internal/domain/engagement"
 )
+
+func TestEngagementToDTO(t *testing.T) {
+	start := time.Date(2024, 1, 1, 10, 0, 0, 0, time.UTC)
+	end := start.Add(2 * time.Hour)
+	created := start.Add(-24 * time.Hour)
+	scope := []string{"https://example.com", "api.example.com"}
+
+	eng := engagement.Reconstruct("eng-123", "Test", "owner@example.com", "ROE text", scope, true, start, end, created)
+	dto := engagementToDTO(eng)
+
+	if dto.ID != "eng-123" || dto.Name != "Test" || dto.Owner != "owner@example.com" {
+		t.Fatalf("unexpected dto identity: %+v", dto)
+	}
+	if !dto.Start.Equal(start) || !dto.End.Equal(end) || !dto.CreatedAt.Equal(created) {
+		t.Fatalf("expected timestamps to match source engagement: %+v", dto)
+	}
+	if dto.ROE != "ROE text" || !dto.ROEAgree {
+		t.Fatalf("expected ROE fields to be preserved, got %+v", dto)
+	}
+	if len(dto.Scope) != len(scope) {
+		t.Fatalf("expected %d scope entries, got %d", len(scope), len(dto.Scope))
+	}
+}
 
 func TestEngagementService_ListEmpty(t *testing.T) {
 	defer setupTestAppContextWithServices(t)()
