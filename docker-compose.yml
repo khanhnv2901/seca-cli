@@ -1,0 +1,218 @@
+services:
+  # PostgreSQL Database (for future use when migrating from JSON)
+  postgres:
+    image: postgres:16-alpine
+    container_name: seca-postgres
+    environment:
+      POSTGRES_USER: seca
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-seca_dev_password}
+      POSTGRES_DB: seca
+      POSTGRES_INITDB_ARGS: "-A md5"
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U seca"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - seca-network
+
+  # Redis Cache (for future caching and job queues)
+  redis:
+    image: redis:7-alpine
+    container_name: seca-redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-seca_redis_password}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - seca-network
+
+  # SECA-CLI API Server
+  seca-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
+    container_name: seca-api
+    environment:
+      # Server configuration
+      SECA_ENV: ${SECA_ENV:-development}
+      SECA_DATA_DIR: /app/data
+
+      # Database configuration (for future use)
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: seca
+      DB_PASSWORD: ${DB_PASSWORD:-seca_dev_password}
+      DB_NAME: seca
+
+      # Redis configuration (for future use)
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-seca_redis_password}
+
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      USER: ${OPERATOR_NAME:-seca_dev_operator}
+    ports:
+      - "${API_PORT:-8080}:8080"
+    volumes:
+      # Mount data directory for persistence
+      - seca_data:/app/data
+      # Mount config file (optional)
+      - ./config:/app/config:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks:
+      - seca-network
+    restart: unless-stopped
+
+  # SECA-CLI Worker (for background jobs - future)
+  seca-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
+    container_name: seca-worker
+    command: ["worker", "--concurrency", "10"]
+    environment:
+      SECA_ENV: ${SECA_ENV:-development}
+      SECA_DATA_DIR: /app/data
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-seca_redis_password}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      USER: ${OPERATOR_NAME:-seca_dev_operator}
+    volumes:
+      - seca_data:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - seca-network
+    restart: unless-stopped
+    # Commented out for now since worker command doesn't exist yet
+    profiles:
+      - full
+
+  # Prometheus (Monitoring)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: seca-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - seca-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  # Grafana (Dashboards)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: seca-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_INSTALL_PLUGINS: grafana-clock-panel
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on:
+      - prometheus
+    networks:
+      - seca-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  # pgAdmin (PostgreSQL GUI)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: seca-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@seca.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    networks:
+      - seca-network
+    restart: unless-stopped
+    profiles:
+      - tools
+
+  # Redis Commander (Redis GUI)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: seca-redis-commander
+    environment:
+      REDIS_HOSTS: local:redis:6379:0:${REDIS_PASSWORD:-seca_redis_password}
+    ports:
+      - "${REDIS_COMMANDER_PORT:-8081}:8081"
+    depends_on:
+      - redis
+    networks:
+      - seca-network
+    restart: unless-stopped
+    profiles:
+      - tools
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  seca_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  seca-network:
+    driver: bridge

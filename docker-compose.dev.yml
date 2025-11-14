@@ -1,0 +1,38 @@
+# Development override for docker-compose.yml
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+version: '3.8'
+
+services:
+  seca-api:
+    build:
+      context: .
+      target: builder  # Stop at builder stage for faster rebuilds
+    command: ["sh", "-c", "go run main.go serve --addr 0.0.0.0:8080"]
+    volumes:
+      # Mount source code for hot reload (requires air or similar tool)
+      - .:/build:delegated
+      # Cache Go modules
+      - go-modules:/go/pkg/mod
+    environment:
+      # Development-specific settings
+      LOG_LEVEL: debug
+      SECA_ENV: development
+    ports:
+      # Expose additional ports for debugging
+      - "8080:8080"  # API
+      - "2345:2345"  # Delve debugger (if needed)
+
+  postgres:
+    # Expose PostgreSQL logs
+    command: ["postgres", "-c", "log_statement=all"]
+    environment:
+      # Development-friendly settings
+      POSTGRES_HOST_AUTH_METHOD: trust  # WARNING: Not for production!
+
+  redis:
+    # Remove password requirement for local development
+    command: redis-server --appendonly yes
+
+volumes:
+  go-modules:

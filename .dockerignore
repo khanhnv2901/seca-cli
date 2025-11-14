@@ -1,0 +1,68 @@
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Build artifacts
+seca
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+coverage.out
+coverage.html
+
+# Data directories
+results/
+data/
+*.json
+*.csv
+*.sha256
+*.asc
+
+# Test artifacts
+test_results_integration/
+test_engagements_integration.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation (except essential ones)
+*.md
+!README.md
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Node modules (if any)
+node_modules/
+
+# Evidence packages
+evidence-*.tar.gz
+evidence-*.tar.gz.asc
+evidence-*.tar.gz.sha256
