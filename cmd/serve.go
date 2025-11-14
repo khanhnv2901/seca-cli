@@ -295,18 +295,6 @@ func (s *healthAPIService) Ready(ctx context.Context) error {
 	return nil
 }
 
-func convertEngagement(e Engagement) api.Engagement {
-	return api.Engagement{
-		ID:        e.ID,
-		Name:      e.Name,
-		Owner:     e.Owner,
-		Scope:     append([]string(nil), e.Scope...),
-		ROE:       e.ROE,
-		ROEAgree:  e.ROEAgree,
-		CreatedAt: e.CreatedAt,
-	}
-}
-
 type jobAPIService struct {
 	manager *api.JobManager
 	runner  jobRunner
