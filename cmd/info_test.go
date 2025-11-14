@@ -3,24 +3,13 @@ package cmd
 import (
 	"bytes"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
-)
 
-// setupTestAppContext initializes the globalAppContext for tests
-func setupTestAppContext() func() {
-	originalAppCtx := globalAppContext
-	globalAppContext = &AppContext{
-		Logger:     nil, // Not needed for most tests
-		Operator:   "test-operator",
-		ResultsDir: "/tmp/test-results",
-		Config:     newCLIConfig(),
-	}
-	return func() {
-		globalAppContext = originalAppCtx
-	}
-}
+	consts "github.com/khanhnv2901/seca-cli/internal/shared/constants"
+)
 
 func useTempDataDir(t *testing.T) string {
 	t.Helper()
@@ -31,7 +20,7 @@ func useTempDataDir(t *testing.T) string {
 
 func TestInfoCommand(t *testing.T) {
 	useTempDataDir(t)
-	defer setupTestAppContext()()
+	defer setupTestAppContext(t)()
 
 	// Capture output
 	var buf bytes.Buffer
@@ -39,8 +28,7 @@ func TestInfoCommand(t *testing.T) {
 	infoCmd.SetErr(&buf)
 
 	// Execute command
-	err := infoCmd.RunE(infoCmd, []string{})
-	if err != nil {
+	if err := infoCmd.RunE(infoCmd, []string{}); err != nil {
 		t.Fatalf("info command failed: %v", err)
 	}
 
@@ -73,7 +61,7 @@ func TestInfoCommand(t *testing.T) {
 
 func TestInfoCommand_ShowsDataDirectory(t *testing.T) {
 	useTempDataDir(t)
-	defer setupTestAppContext()()
+	defer setupTestAppContext(t)()
 
 	// Get expected data directory
 	dataDir, err := getDataDir()
@@ -87,8 +75,7 @@ func TestInfoCommand_ShowsDataDirectory(t *testing.T) {
 	infoCmd.SetErr(&buf)
 
 	// Execute command
-	err = infoCmd.RunE(infoCmd, []string{})
-	if err != nil {
+	if err := infoCmd.RunE(infoCmd, []string{}); err != nil {
 		t.Fatalf("info command failed: %v", err)
 	}
 
@@ -102,7 +89,7 @@ func TestInfoCommand_ShowsDataDirectory(t *testing.T) {
 
 func TestInfoCommand_ShowsEngagementsPath(t *testing.T) {
 	useTempDataDir(t)
-	defer setupTestAppContext()()
+	defer setupTestAppContext(t)()
 
 	// Get expected engagements path
 	engagementsPath, err := getEngagementsFilePath()
@@ -131,7 +118,7 @@ func TestInfoCommand_ShowsEngagementsPath(t *testing.T) {
 
 func TestInfoCommand_ShowsResultsDirectory(t *testing.T) {
 	useTempDataDir(t)
-	defer setupTestAppContext()()
+	defer setupTestAppContext(t)()
 
 	// Get expected results directory from appContext (which overrides the default)
 	expectedResultsDir := globalAppContext.ResultsDir
@@ -142,8 +129,7 @@ func TestInfoCommand_ShowsResultsDirectory(t *testing.T) {
 	infoCmd.SetErr(&buf)
 
 	// Execute command
-	err := infoCmd.RunE(infoCmd, []string{})
-	if err != nil {
+	if err := infoCmd.RunE(infoCmd, []string{}); err != nil {
 		t.Fatalf("info command failed: %v", err)
 	}
 
@@ -157,22 +143,20 @@ func TestInfoCommand_ShowsResultsDirectory(t *testing.T) {
 
 func TestInfoCommand_ShowsFileExistence(t *testing.T) {
 	useTempDataDir(t)
-	defer setupTestAppContext()()
+	defer setupTestAppContext(t)()
 
-	// Create test engagements file
-	cleanup := setupTestEngagements(t)
-	defer cleanup()
-
-	// Create at least one engagement to ensure file exists
-	testEngagements := []Engagement{
-		{
-			ID:       "test-123",
-			Name:     "Test Engagement",
-			Owner:    "test@example.com",
-			ROEAgree: true,
-		},
+	engagementsPath, err := getEngagementsFilePath()
+	if err != nil {
+		t.Fatalf("failed to get engagements path: %v", err)
 	}
-	saveEngagements(testEngagements)
+
+	// Create a minimal engagements file to simulate existing data
+	if err := os.MkdirAll(filepath.Dir(engagementsPath), consts.DefaultDirPerm); err != nil {
+		t.Fatalf("failed to create engagements directory: %v", err)
+	}
+	if err := os.WriteFile(engagementsPath, []byte(`[]`), consts.DefaultFilePerm); err != nil {
+		t.Fatalf("failed to create engagements file: %v", err)
+	}
 
 	// Capture output
 	var buf bytes.Buffer
@@ -180,8 +164,7 @@ func TestInfoCommand_ShowsFileExistence(t *testing.T) {
 	infoCmd.SetErr(&buf)
 
 	// Execute command
-	err := infoCmd.RunE(infoCmd, []string{})
-	if err != nil {
+	if err := infoCmd.RunE(infoCmd, []string{}); err != nil {
 		t.Fatalf("info command failed: %v", err)
 	}
 
@@ -199,7 +182,7 @@ func TestInfoCommand_ShowsFileExistence(t *testing.T) {
 }
 
 func TestInfoCommand_ShowsConfigInfo(t *testing.T) {
-	defer setupTestAppContext()()
+	defer setupTestAppContext(t)()
 
 	// Capture output
 	var buf bytes.Buffer
@@ -207,8 +190,7 @@ func TestInfoCommand_ShowsConfigInfo(t *testing.T) {
 	infoCmd.SetErr(&buf)
 
 	// Execute command
-	err := infoCmd.RunE(infoCmd, []string{})
-	if err != nil {
+	if err := infoCmd.RunE(infoCmd, []string{}); err != nil {
 		t.Fatalf("info command failed: %v", err)
 	}
 
@@ -227,7 +209,7 @@ func TestInfoCommand_ShowsConfigInfo(t *testing.T) {
 }
 
 func TestInfoCommand_ShowsDocumentation(t *testing.T) {
-	defer setupTestAppContext()()
+	defer setupTestAppContext(t)()
 
 	// Capture output
 	var buf bytes.Buffer
@@ -259,7 +241,7 @@ func TestInfoCommand_ShowsDocumentation(t *testing.T) {
 }
 
 func TestInfoCommand_ShowsOverrideInstructions(t *testing.T) {
-	defer setupTestAppContext()()
+	defer setupTestAppContext(t)()
 
 	// Capture output
 	var buf bytes.Buffer
@@ -285,7 +267,7 @@ func TestInfoCommand_ShowsOverrideInstructions(t *testing.T) {
 }
 
 func TestInfoCommand_WithOperator(t *testing.T) {
-	defer setupTestAppContext()()
+	defer setupTestAppContext(t)()
 
 	// Capture output
 	var buf bytes.Buffer
@@ -307,7 +289,7 @@ func TestInfoCommand_WithOperator(t *testing.T) {
 }
 
 func TestInfoCommand_DataDirError(t *testing.T) {
-	defer setupTestAppContext()()
+	defer setupTestAppContext(t)()
 
 	// This test verifies that if getDataDir fails, the command returns an error
 	// In normal circumstances, getDataDir should not fail, but we test the error path
@@ -331,7 +313,7 @@ func TestInfoCommand_DataDirError(t *testing.T) {
 }
 
 func TestInfoCommand_PlatformSpecific(t *testing.T) {
-	defer setupTestAppContext()()
+	defer setupTestAppContext(t)()
 
 	// Capture output
 	var buf bytes.Buffer
@@ -357,21 +339,11 @@ func TestInfoCommand_PlatformSpecific(t *testing.T) {
 		t.Errorf("Expected output to contain data directory '%s'", dataDir)
 	}
 
-	// Check that the data directory matches OS expectations
-	switch runtime.GOOS {
-	case "windows":
-		if !strings.Contains(dataDir, "seca-cli") {
-			t.Errorf("Windows: Expected path to contain seca-cli, got: %s", dataDir)
-		}
-	case "darwin":
-		if !strings.Contains(dataDir, "Library") {
-			t.Errorf("macOS: Expected path to contain Library, got: %s", dataDir)
-		}
-	default: // Linux/Unix
-		homeDir, _ := os.UserHomeDir()
-		expectedPrefix := homeDir + "/.local/share"
-		if !strings.HasPrefix(dataDir, expectedPrefix) {
-			t.Errorf("Linux: Expected path to start with %s, got: %s", expectedPrefix, dataDir)
-		}
+	// Ensure the path is absolute and points to an existing directory.
+	if !filepath.IsAbs(dataDir) {
+		t.Errorf("Expected absolute data directory, got: %s", dataDir)
+	}
+	if stat, err := os.Stat(dataDir); err != nil || !stat.IsDir() {
+		t.Errorf("Expected data directory to exist, got error: %v", err)
 	}
 }

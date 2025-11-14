@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"strconv"
@@ -14,19 +15,29 @@ var tuiCmd = &cobra.Command{
 	Use:   "tui",
 	Short: "Interactive terminal UI for engagement management",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runTUI()
+		return runTUI(getAppContext(cmd))
 	},
 }
 
-func runTUI() error {
+func runTUI(appCtx *AppContext) error {
+	if appCtx.Services == nil || appCtx.Services.EngagementService == nil {
+		return fmt.Errorf("engagement services not initialized")
+	}
+
 	reader := bufio.NewReader(os.Stdin)
+	ctx := context.Background()
+
 	for {
-		list := loadEngagements()
+		dtos, err := listEngagementDTOs(ctx, appCtx)
+		if err != nil {
+			return err
+		}
+
 		fmt.Println("=== SECA Engagements ===")
-		if len(list) == 0 {
+		if len(dtos) == 0 {
 			fmt.Println("No engagements found. Use `seca engagement create` to add one.")
 		}
-		for i, eng := range list {
+		for i, eng := range dtos {
 			fmt.Printf("[%d] %s (Owner: %s, Scope: %d target(s))\n", i+1, eng.Name, eng.Owner, len(eng.Scope))
 		}
 		fmt.Println("[a] Add scope    [r] Refresh    [q] Quit")
@@ -40,25 +51,35 @@ func runTUI() error {
 		case "r", "":
 			continue
 		case "a":
-			if err := handleAddScope(reader, list); err != nil {
+			if err := handleAddScope(ctx, reader, appCtx); err != nil {
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			}
 			continue
 		default:
 			index, err := strconv.Atoi(input)
-			if err != nil || index < 1 || index > len(list) {
+			if err != nil || index < 1 || index > len(dtos) {
 				fmt.Println("Invalid selection")
 				continue
 			}
-			showEngagementDetail(reader, list[index-1])
+			showEngagementDetail(reader, dtos[index-1])
 		}
 	}
 }
 
-func handleAddScope(reader *bufio.Reader, engagements []Engagement) error {
-	if len(engagements) == 0 {
-		return fmt.Errorf("no engagements available")
+func listEngagementDTOs(ctx context.Context, appCtx *AppContext) ([]engagementDTO, error) {
+	engagements, err := appCtx.Services.EngagementService.ListEngagements(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list engagements: %w", err)
 	}
+
+	dtos := make([]engagementDTO, len(engagements))
+	for i, eng := range engagements {
+		dtos[i] = engagementToDTO(eng)
+	}
+	return dtos, nil
+}
+
+func handleAddScope(ctx context.Context, reader *bufio.Reader, appCtx *AppContext) error {
 	fmt.Print("Enter engagement ID: ")
 	id, err := reader.ReadString('\n')
 	if err != nil {
@@ -68,6 +89,7 @@ func handleAddScope(reader *bufio.Reader, engagements []Engagement) error {
 	if id == "" {
 		return fmt.Errorf("ID required")
 	}
+
 	fmt.Print("Enter scope entries (comma separated): ")
 	scopeLine, err := reader.ReadString('\n')
 	if err != nil {
@@ -77,14 +99,26 @@ func handleAddScope(reader *bufio.Reader, engagements []Engagement) error {
 	if scopeLine == "" {
 		return fmt.Errorf("scope required")
 	}
-	add := strings.Split(scopeLine, ",")
-	for i := range add {
-		add[i] = strings.TrimSpace(add[i])
+
+	entries := strings.Split(scopeLine, ",")
+	for i := range entries {
+		entries[i] = strings.TrimSpace(entries[i])
 	}
-	return addScopeEntries(id, add)
+
+	normalized, err := normalizeScopeEntries(id, entries)
+	if err != nil {
+		return err
+	}
+
+	if err := appCtx.Services.EngagementService.AddToScope(ctx, id, normalized); err != nil {
+		return fmt.Errorf("failed to add scope entries: %w", err)
+	}
+
+	fmt.Printf("%s scope %v to engagement %s\n", colorSuccess("Added"), normalized, id)
+	return nil
 }
 
-func showEngagementDetail(reader *bufio.Reader, eng Engagement) {
+func showEngagementDetail(reader *bufio.Reader, eng engagementDTO) {
 	fmt.Println("--------------------------------------------------")
 	fmt.Printf("Name  : %s\n", eng.Name)
 	fmt.Printf("ID    : %s\n", eng.ID)

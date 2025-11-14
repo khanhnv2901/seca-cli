@@ -1,69 +1,59 @@
 package tests
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"testing"
-	"time"
 
-	cmdpkg "github.com/khanhnv2901/seca-cli/cmd"
-	"github.com/khanhnv2901/seca-cli/cmd/testutil"
-	_ "unsafe"
+	"github.com/khanhnv2901/seca-cli/internal/application"
 )
 
-//go:linkname linkedLoadEngagements github.com/khanhnv2901/seca-cli/cmd.loadEngagements
-func linkedLoadEngagements() []cmdpkg.Engagement
-
-//go:linkname linkedSaveEngagements github.com/khanhnv2901/seca-cli/cmd.saveEngagements
-func linkedSaveEngagements(list []cmdpkg.Engagement)
-
-//go:linkname linkedAddScopeEntries github.com/khanhnv2901/seca-cli/cmd.addScopeEntries
-func linkedAddScopeEntries(id string, entries []string) error
-
-//go:linkname linkedGetEngagementsFilePath github.com/khanhnv2901/seca-cli/cmd.getEngagementsFilePath
-func linkedGetEngagementsFilePath() (string, error)
-
 func TestEngagementCRUD(t *testing.T) {
-	t.Setenv("XDG_DATA_HOME", t.TempDir())
-
-	cleanup := testutil.SetupEngagementsFile(t, linkedGetEngagementsFilePath)
-	defer cleanup()
-
-	created := cmdpkg.Engagement{
-		ID:        "crud-1",
-		Name:      "CRUD Test",
-		Owner:     "owner@example.com",
-		CreatedAt: time.Now(),
-		ROEAgree:  true,
+	dataDir := t.TempDir()
+	resultsDir := filepath.Join(dataDir, "results")
+	if err := os.MkdirAll(resultsDir, 0o755); err != nil {
+		t.Fatalf("failed to create results directory: %v", err)
 	}
 
-	linkedSaveEngagements([]cmdpkg.Engagement{created})
-
-	engagements := linkedLoadEngagements()
-	if len(engagements) != 1 {
-		t.Fatalf("expected 1 engagement after create, got %d", len(engagements))
-	}
-	if engagements[0].Name != created.Name {
-		t.Fatalf("expected name %s, got %s", created.Name, engagements[0].Name)
+	container, err := application.NewContainer(dataDir, resultsDir)
+	if err != nil {
+		t.Fatalf("failed to initialize services: %v", err)
 	}
 
-	if err := linkedAddScopeEntries(created.ID, []string{"https://example.com"}); err != nil {
+	ctx := context.Background()
+	service := container.EngagementService
+
+	eng, err := service.CreateEngagement(ctx, "CRUD Test", "owner@example.com", "Test ROE", nil)
+	if err != nil {
+		t.Fatalf("create engagement failed: %v", err)
+	}
+
+	if err := service.AcknowledgeROE(ctx, eng.ID()); err != nil {
+		t.Fatalf("acknowledge ROE failed: %v", err)
+	}
+
+	if err := service.AddToScope(ctx, eng.ID(), []string{"https://example.com"}); err != nil {
 		t.Fatalf("add scope failed: %v", err)
 	}
 
-	updated := linkedLoadEngagements()
-	if len(updated[0].Scope) != 1 || updated[0].Scope[0] != "https://example.com" {
-		t.Fatalf("expected updated scope entry, got %+v", updated[0].Scope)
+	updated, err := service.GetEngagement(ctx, eng.ID())
+	if err != nil {
+		t.Fatalf("get engagement failed: %v", err)
+	}
+	if len(updated.Scope()) != 1 || updated.Scope()[0] != "https://example.com" {
+		t.Fatalf("expected scope entry to be added, got %+v", updated.Scope())
 	}
 
-	pruned := make([]cmdpkg.Engagement, 0)
-	for _, eng := range updated {
-		if eng.ID != created.ID {
-			pruned = append(pruned, eng)
-		}
+	if err := service.DeleteEngagement(ctx, eng.ID()); err != nil {
+		t.Fatalf("delete engagement failed: %v", err)
 	}
-	linkedSaveEngagements(pruned)
 
-	final := linkedLoadEngagements()
-	if len(final) != 0 {
-		t.Fatalf("expected no engagements after delete simulation, got %d", len(final))
+	list, err := service.ListEngagements(ctx)
+	if err != nil {
+		t.Fatalf("list engagements failed: %v", err)
+	}
+	if len(list) != 0 {
+		t.Fatalf("expected no engagements after delete, got %d", len(list))
 	}
 }

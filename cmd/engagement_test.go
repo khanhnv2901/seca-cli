@@ -1,134 +1,86 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
-	"os"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/khanhnv2901/seca-cli/cmd/testutil"
-	consts "github.com/khanhnv2901/seca-cli/internal/shared/constants"
 )
 
-// Helper function to backup and restore engagements file
-// Note: This uses testutil.SetupEngagementsFile internally
-func setupTestEngagements(t *testing.T) func() {
-	t.Helper()
-	t.Setenv(dataDirEnvVar, t.TempDir())
-	return testutil.SetupEngagementsFile(t, getEngagementsFilePath)
-}
+func TestEngagementService_ListEmpty(t *testing.T) {
+	defer setupTestAppContextWithServices(t)()
 
-func TestLoadEngagements_EmptyFile(t *testing.T) {
-	cleanup := setupTestEngagements(t)
-	defer cleanup()
-
-	// Test loading when file doesn't exist
-	result := loadEngagements()
-	if len(result) != 0 {
-		t.Errorf("Expected empty slice, got %d engagements", len(result))
-	}
-}
-
-func TestLoadEngagements_ValidFile(t *testing.T) {
-	cleanup := setupTestEngagements(t)
-	defer cleanup()
-
-	// Create test data
-	testEngagements := []Engagement{
-		{
-			ID:        "123456",
-			Name:      "Test Engagement",
-			Owner:     "test@example.com",
-			ROE:       "Test ROE",
-			ROEAgree:  true,
-			CreatedAt: time.Now(),
-			Scope:     []string{"https://example.com"},
-		},
-	}
-
-	// Get the actual file path
-	filePath, err := getEngagementsFilePath()
+	ctx := context.Background()
+	engagements, err := globalAppContext.Services.EngagementService.ListEngagements(ctx)
 	if err != nil {
-		t.Fatalf("Failed to get engagements file path: %v", err)
+		t.Fatalf("ListEngagements() error = %v", err)
 	}
-
-	// Write test data
-	data, _ := json.MarshalIndent(testEngagements, jsonPrefix, jsonIndent)
-	if err := os.WriteFile(filePath, data, consts.DefaultFilePerm); err != nil {
-		t.Fatalf("Failed to write test file: %v", err)
-	}
-
-	// Load and verify
-	result := loadEngagements()
-	if len(result) != 1 {
-		t.Fatalf("Expected 1 engagement, got %d", len(result))
-	}
-
-	if result[0].ID != "123456" {
-		t.Errorf("Expected ID '123456', got '%s'", result[0].ID)
-	}
-
-	if result[0].Name != "Test Engagement" {
-		t.Errorf("Expected name 'Test Engagement', got '%s'", result[0].Name)
-	}
-
-	if result[0].Owner != "test@example.com" {
-		t.Errorf("Expected owner 'test@example.com', got '%s'", result[0].Owner)
-	}
-
-	if !result[0].ROEAgree {
-		t.Error("Expected ROEAgree to be true")
-	}
-
-	if len(result[0].Scope) != 1 {
-		t.Errorf("Expected 1 scope item, got %d", len(result[0].Scope))
+	if len(engagements) != 0 {
+		t.Fatalf("expected empty engagement list, got %d", len(engagements))
 	}
 }
 
-func TestSaveEngagements(t *testing.T) {
-	cleanup := setupTestEngagements(t)
-	defer cleanup()
+func TestEngagementService_CreateAndRetrieve(t *testing.T) {
+	defer setupTestAppContextWithServices(t)()
 
-	testEngagements := []Engagement{
-		{
-			ID:        "789012",
-			Name:      "Save Test",
-			Owner:     "save@example.com",
-			ROE:       "Test ROE",
-			ROEAgree:  true,
-			CreatedAt: time.Now(),
-			Scope:     []string{"https://test.com"},
-		},
-	}
+	ctx := context.Background()
+	svc := globalAppContext.Services.EngagementService
 
-	// Save engagements
-	saveEngagements(testEngagements)
-
-	// Get the actual file path (which might be in data directory)
-	filePath, err := getEngagementsFilePath()
+	created, err := svc.CreateEngagement(ctx, "Test Engagement", "owner@example.com", "Test ROE", []string{"https://example.com"})
 	if err != nil {
-		t.Fatalf("Failed to get engagements file path: %v", err)
+		t.Fatalf("CreateEngagement() error = %v", err)
+	}
+	if err := svc.AcknowledgeROE(ctx, created.ID()); err != nil {
+		t.Fatalf("AcknowledgeROE() error = %v", err)
 	}
 
-	// Verify file exists
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		t.Fatalf("File was not created at %s", filePath)
+	fetched, err := svc.GetEngagement(ctx, created.ID())
+	if err != nil {
+		t.Fatalf("GetEngagement() error = %v", err)
 	}
 
-	// Load back and verify
-	data, _ := os.ReadFile(filePath)
-	var loaded []Engagement
-	if err := json.Unmarshal(data, &loaded); err != nil {
-		t.Fatalf("Failed to unmarshal: %v", err)
+	if fetched.Name() != "Test Engagement" {
+		t.Errorf("expected name to be %q, got %q", "Test Engagement", fetched.Name())
+	}
+	if fetched.Owner() != "owner@example.com" {
+		t.Errorf("expected owner to be %q, got %q", "owner@example.com", fetched.Owner())
+	}
+	if !fetched.ROEAgreed() {
+		t.Error("expected ROE to be acknowledged")
+	}
+	if len(fetched.Scope()) != 1 || fetched.Scope()[0] != "https://example.com" {
+		t.Errorf("expected initial scope to include https://example.com, got %+v", fetched.Scope())
+	}
+}
+
+func TestEngagementService_AddScopeEntries(t *testing.T) {
+	defer setupTestAppContextWithServices(t)()
+
+	ctx := context.Background()
+	svc := globalAppContext.Services.EngagementService
+
+	created, err := svc.CreateEngagement(ctx, "Scope Test", "owner@example.com", "Test ROE", nil)
+	if err != nil {
+		t.Fatalf("CreateEngagement() error = %v", err)
 	}
 
-	if len(loaded) != 1 {
-		t.Fatalf("Expected 1 engagement, got %d", len(loaded))
+	normalized, err := normalizeScopeEntries(created.ID(), []string{" https://api.example.com "})
+	if err != nil {
+		t.Fatalf("normalizeScopeEntries() error = %v", err)
 	}
 
-	if loaded[0].ID != "789012" {
-		t.Errorf("Expected ID '789012', got '%s'", loaded[0].ID)
+	if err := svc.AddToScope(ctx, created.ID(), normalized); err != nil {
+		t.Fatalf("AddToScope() error = %v", err)
+	}
+
+	fetched, err := svc.GetEngagement(ctx, created.ID())
+	if err != nil {
+		t.Fatalf("GetEngagement() error = %v", err)
+	}
+
+	if len(fetched.Scope()) != 1 || fetched.Scope()[0] != "https://api.example.com" {
+		t.Fatalf("expected scope entry to be normalized, got %+v", fetched.Scope())
 	}
 }
 
@@ -188,48 +140,6 @@ func TestEngagement_JSONMarshaling(t *testing.T) {
 
 	if decoded.Name != engagement.Name {
 		t.Errorf("Name mismatch: expected '%s', got '%s'", engagement.Name, decoded.Name)
-	}
-}
-
-func TestEngagement_MultipleEngagements(t *testing.T) {
-	cleanup := setupTestEngagements(t)
-	defer cleanup()
-
-	engagements := []Engagement{
-		{
-			ID:        "1",
-			Name:      "First",
-			Owner:     "first@example.com",
-			ROEAgree:  true,
-			CreatedAt: time.Now(),
-		},
-		{
-			ID:        "2",
-			Name:      "Second",
-			Owner:     "second@example.com",
-			ROEAgree:  true,
-			CreatedAt: time.Now(),
-		},
-		{
-			ID:        "3",
-			Name:      "Third",
-			Owner:     "third@example.com",
-			ROEAgree:  true,
-			CreatedAt: time.Now(),
-		},
-	}
-
-	saveEngagements(engagements)
-	loaded := loadEngagements()
-
-	if len(loaded) != 3 {
-		t.Fatalf("Expected 3 engagements, got %d", len(loaded))
-	}
-
-	for i, eng := range loaded {
-		if eng.ID != engagements[i].ID {
-			t.Errorf("Engagement %d: expected ID '%s', got '%s'", i, engagements[i].ID, eng.ID)
-		}
 	}
 }
 
@@ -319,72 +229,6 @@ func TestValidateScopeEntry(t *testing.T) {
 		if err := validateScopeEntry(entry); err == nil {
 			t.Fatalf("expected %s to be invalid", entry)
 		}
-	}
-}
-
-func TestFindEngagementByID(t *testing.T) {
-	cleanup := setupTestEngagements(t)
-	defer cleanup()
-
-	list := []Engagement{
-		{ID: "abc", Name: "First"},
-		{ID: "xyz", Name: "Second"},
-	}
-	saveEngagements(list)
-
-	eng, err := findEngagementByID("xyz")
-	if err != nil {
-		t.Fatalf("expected engagement to be found, got %v", err)
-	}
-	if eng.Name != "Second" {
-		t.Fatalf("expected Second, got %s", eng.Name)
-	}
-
-	if _, err := findEngagementByID(""); err == nil {
-		t.Fatal("expected error for missing id")
-	}
-
-	if _, err := findEngagementByID("missing"); err == nil {
-		t.Fatal("expected error for missing engagement")
-	}
-}
-
-func TestEngagement_ScopeHandling(t *testing.T) {
-	cleanup := setupTestEngagements(t)
-	defer cleanup()
-
-	engagement := Engagement{
-		ID:        "scope-test",
-		Name:      "Scope Test",
-		Owner:     "test@example.com",
-		ROEAgree:  true,
-		CreatedAt: time.Now(),
-		Scope:     []string{},
-	}
-
-	// Test with empty scope
-	if len(engagement.Scope) != 0 {
-		t.Errorf("Expected empty scope, got %d items", len(engagement.Scope))
-	}
-
-	// Add scope items
-	engagement.Scope = append(engagement.Scope, "https://example.com")
-	engagement.Scope = append(engagement.Scope, "https://api.example.com")
-
-	if len(engagement.Scope) != 2 {
-		t.Errorf("Expected 2 scope items, got %d", len(engagement.Scope))
-	}
-
-	// Save and reload
-	saveEngagements([]Engagement{engagement})
-	loaded := loadEngagements()
-
-	if len(loaded) != 1 {
-		t.Fatalf("Expected 1 engagement, got %d", len(loaded))
-	}
-
-	if len(loaded[0].Scope) != 2 {
-		t.Errorf("Expected 2 scope items after reload, got %d", len(loaded[0].Scope))
 	}
 }
 

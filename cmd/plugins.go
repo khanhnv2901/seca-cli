@@ -1,13 +1,20 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
+	"time"
 
+	"github.com/khanhnv2901/seca-cli/internal/domain/audit"
 	"github.com/khanhnv2901/seca-cli/internal/infrastructure/checker"
+	sharedErrors "github.com/khanhnv2901/seca-cli/internal/shared/errors"
 	"github.com/khanhnv2901/seca-cli/internal/shared/security"
 	"github.com/spf13/cobra"
 )
@@ -110,47 +117,171 @@ func addPluginCommand(def checkerPluginDefinition) error {
 		Use:   def.Name,
 		Short: def.Description,
 		RunE: func(c *cobra.Command, args []string) error {
-			return runCheckCommand(c, checkConfig{
-				CreateChecker: func(appCtx *AppContext, params checkParams) checker.Checker {
-					return checker.NewExternalChecker(checker.ExternalCheckerConfig{
-						Name:           def.Name,
-						Command:        def.Command,
-						Args:           def.Args,
-						Env:            def.Env,
-						TimeoutSeconds: def.TimeoutSeconds,
-					})
-				},
-				CreateAuditFn: func(appCtx *AppContext, params checkParams, chk checker.Checker) func(string, checker.CheckResult, float64) error {
-					return func(target string, result checker.CheckResult, duration float64) error {
-						return AppendAuditRow(
-							appCtx.ResultsDir,
-							params.ID,
-							appCtx.Operator,
-							chk.Name(),
-							target,
-							result.Status,
-							result.HTTPStatus,
-							result.TLSExpiry,
-							result.Notes,
-							result.Error,
-							duration,
-						)
-					}
-				},
-				ResultsFilename:        def.ResultsFilename,
-				TimeoutSecs:            def.TimeoutSeconds,
-				VerificationCmdBuilder: makeVerificationCommand(def.ResultsFilename),
-				SupportsRawCapture:     false,
-				PrintSummary: func(results []checker.CheckResult, resultsPath, auditPath, auditHash, resultsHash string, hashAlgo HashAlgorithm) {
-					fmt.Printf("%s plugin run complete.\n", def.Name)
-					fmt.Printf("Results: %s\nAudit: %s\n", resultsPath, auditPath)
-					fmt.Printf("%s audit: %s\n%s results: %s\n", hashAlgo.DisplayName(), auditHash, hashAlgo.DisplayName(), resultsHash)
-				},
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			appCtx := getAppContext(c)
+			runtimeCfg := appCtx.Config.Check
+			startTime := time.Now()
+
+			sigCh := make(chan os.Signal, 1)
+			signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+			defer signal.Stop(sigCh)
+
+			go func() {
+				select {
+				case sig := <-sigCh:
+					fmt.Printf("\n%s Received %s, finalizing partial results...\n", colorWarn("!"), sig.String())
+					cancel()
+				case <-ctx.Done():
+				}
+			}()
+
+			engagementID := c.Flag("id").Value.String()
+			roeConfirm := c.Flag("roe-confirm").Value.String() == "true"
+
+			if engagementID == "" {
+				return errors.New("--id is required")
+			}
+
+			if !roeConfirm {
+				return errors.New("must pass --roe-confirm to run checks")
+			}
+
+			eng, err := appCtx.Services.EngagementService.GetEngagement(ctx, engagementID)
+			if err != nil {
+				if errors.Is(err, sharedErrors.ErrEngagementNotFound) {
+					return fmt.Errorf("engagement %s not found", engagementID)
+				}
+				return fmt.Errorf("failed to get engagement: %w", err)
+			}
+
+			if err := appCtx.Services.EngagementService.ValidateEngagementForChecks(ctx, engagementID, ""); err != nil {
+				return fmt.Errorf("engagement validation failed: %w", err)
+			}
+
+			checkRun, err := appCtx.Services.CheckOrchestrator.CreateCheckRun(ctx, engagementID, appCtx.Operator)
+			if err != nil {
+				return fmt.Errorf("failed to create check run: %w", err)
+			}
+
+			fmt.Printf("%s Starting plugin %s for engagement: %s\n", colorInfo("→"), def.Name, eng.Name())
+			fmt.Printf("%s Targets: %d\n", colorInfo("→"), len(eng.Scope()))
+			fmt.Println()
+
+			externalChecker := checker.NewExternalChecker(checker.ExternalCheckerConfig{
+				Name:           def.Name,
+				Command:        def.Command,
+				Args:           def.Args,
+				Env:            def.Env,
+				TimeoutSeconds: def.TimeoutSeconds,
 			})
+
+			timeout := time.Duration(def.TimeoutSeconds) * time.Second
+			if timeout <= 0 {
+				timeout = time.Duration(runtimeCfg.TimeoutSecs) * time.Second
+			}
+
+			runner := &checker.Runner{
+				Concurrency: runtimeCfg.Concurrency,
+				RateLimit:   runtimeCfg.RateLimit,
+				Timeout:     timeout,
+			}
+
+			baseTargets := append([]string(nil), eng.Scope()...)
+			targets := expandTargetsWithCrawl(ctx, baseTargets, runtimeCfg)
+
+			var progress *progressPrinter
+			if runtimeCfg.ProgressEnabled {
+				progress = newProgressPrinter(len(targets), externalChecker.Name())
+				progress.Start()
+			}
+
+			adapter := &resultAdapter{}
+
+			auditFn := func(target string, checkerResult checker.CheckResult, duration float64) error {
+				entry := &audit.Entry{
+					Timestamp:       time.Now(),
+					EngagementID:    engagementID,
+					Operator:        appCtx.Operator,
+					Command:         fmt.Sprintf("plugin %s", def.Name),
+					Target:          target,
+					Status:          checkerResult.Status,
+					HTTPStatus:      checkerResult.HTTPStatus,
+					Notes:           checkerResult.Notes,
+					Error:           checkerResult.Error,
+					DurationSeconds: duration,
+				}
+
+				if checkerResult.TLSExpiry != "" {
+					if expiry, err := time.Parse(time.RFC3339, checkerResult.TLSExpiry); err == nil {
+						entry.TLSExpiry = expiry
+					}
+				}
+
+				if err := appCtx.Services.CheckOrchestrator.RecordAuditEntry(ctx, entry); err != nil {
+					return fmt.Errorf("failed to record audit: %w", err)
+				}
+
+				domainResult, err := adapter.toDomain(target, checkerResult)
+				if err != nil {
+					return fmt.Errorf("failed to convert result: %w", err)
+				}
+
+				if err := appCtx.Services.CheckOrchestrator.AddCheckResult(ctx, checkRun, domainResult); err != nil {
+					return fmt.Errorf("failed to add result: %w", err)
+				}
+
+				if progress != nil {
+					progress.Increment(checkerResult.Status == "ok", duration)
+				}
+
+				return nil
+			}
+
+			results := runner.RunChecks(ctx, targets, externalChecker, auditFn)
+
+			if progress != nil {
+				progress.Stop()
+			}
+
+			runDuration := time.Since(startTime)
+			if runtimeCfg.TelemetryEnabled {
+				if err := recordTelemetry(appCtx, engagementID, externalChecker.Name(), results, runDuration); err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: failed to record telemetry: %v\n", err)
+				}
+			}
+
+			fmt.Printf("\n%s Plugin %s run complete (%d target(s))\n", colorSuccess("✓"), def.Name, len(results))
+
+			hashAlgo := runtimeCfg.HashAlgorithm
+			if hashAlgo == "" {
+				hashAlgo = "sha256"
+			}
+
+			auditHash, err := appCtx.Services.CheckOrchestrator.SealAuditTrail(ctx, engagementID, hashAlgo)
+			if err != nil {
+				return fmt.Errorf("failed to seal audit trail: %w", err)
+			}
+
+			if err := appCtx.Services.CheckOrchestrator.FinalizeCheckRun(ctx, checkRun, auditHash, hashAlgo); err != nil {
+				return fmt.Errorf("failed to finalize check run: %w", err)
+			}
+
+			resultsPath := filepath.Join(appCtx.ResultsDir, engagementID, "http_results.json")
+			auditPath := filepath.Join(appCtx.ResultsDir, engagementID, "audit.csv")
+
+			fmt.Println()
+			fmt.Printf("%s Results: %s\n", colorSuccess("→"), resultsPath)
+			fmt.Printf("%s Audit: %s\n", colorSuccess("→"), auditPath)
+			fmt.Printf("%s Audit hash (%s): %s\n", colorSuccess("→"), hashAlgo, auditHash)
+
+			return nil
 		},
 	}
 
-	addCommonCheckFlags(cmd)
+	cmd.Flags().String("id", "", "Engagement ID")
+	cmd.Flags().Bool("roe-confirm", false, "Confirm ROE and authorization")
 	checkCmd.AddCommand(cmd)
 	return nil
 }

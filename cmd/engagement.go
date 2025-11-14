@@ -131,41 +131,8 @@ var allowedScopeSchemes = map[string]struct{}{
 // These functions are used by TUI and DDD commands for scope management.
 // ============================================================================
 
-// addScopeEntries adds scope entries to an engagement.
-// DEPRECATED: Use appCtx.Services.EngagementService.AddToScope() instead.
-// Still used by: tui.go
-func addScopeEntries(id string, entries []string) error {
-	if id == "" {
-		return errors.New("--id is required")
-	}
-	if len(entries) == 0 {
-		return errors.New("--scope must contain one or more hosts/urls")
-	}
-
-	normalizedScope, err := normalizeScopeEntries(id, entries)
-	if err != nil {
-		return err
-	}
-
-	list := loadEngagements()
-	found := false
-	for i := range list {
-		if list[i].ID == id {
-			list[i].Scope = append(list[i].Scope, normalizedScope...)
-			found = true
-			break
-		}
-	}
-	if !found {
-		return &EngagementNotFoundError{ID: id}
-	}
-	saveEngagements(list)
-	fmt.Printf("%s scope %v to engagement %s\n", colorSuccess("Added"), normalizedScope, id)
-	return nil
-}
-
 // normalizeScopeEntries validates and normalizes scope entries.
-// Used by: engagement_ddd.go (DDD commands), tui.go (via addScopeEntries)
+// Used by: engagement_ddd.go (DDD commands), tui.go
 func normalizeScopeEntries(scopeID string, entries []string) ([]string, error) {
 	out := make([]string, len(entries))
 	for i, entry := range entries {
