@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/khanhnv2901/seca-cli/internal/api/middleware"
 	"go.uber.org/zap/zaptest"
 )
 
@@ -31,7 +32,13 @@ func TestWriteErrorInternal(t *testing.T) {
 	s := &Server{cfg: Config{Logger: logger}}
 
 	rr := httptest.NewRecorder()
-	s.writeError(rr, http.StatusInternalServerError, errors.New("boom"))
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+
+	// Add request ID to context (simulating middleware)
+	ctx := context.WithValue(req.Context(), middleware.RequestIDKey, "test-request-123")
+	req = req.WithContext(ctx)
+
+	s.writeError(rr, req, http.StatusInternalServerError, errors.New("boom"))
 
 	if rr.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", rr.Code)
@@ -44,7 +51,8 @@ func TestWriteErrorInternal(t *testing.T) {
 func TestWriteErrorClient(t *testing.T) {
 	s := &Server{}
 	rr := httptest.NewRecorder()
-	s.writeError(rr, http.StatusBadRequest, errors.New("bad input"))
+	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
+	s.writeError(rr, req, http.StatusBadRequest, errors.New("bad input"))
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rr.Code)
 	}
@@ -56,7 +64,8 @@ func TestWriteErrorClient(t *testing.T) {
 func TestMethodNotAllowed(t *testing.T) {
 	s := &Server{}
 	rr := httptest.NewRecorder()
-	s.methodNotAllowed(rr)
+	req := httptest.NewRequest(http.MethodPost, "/api/test", nil)
+	s.methodNotAllowed(rr, req)
 	if rr.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("expected status 405, got %d", rr.Code)
 	}
@@ -87,11 +96,16 @@ func (f *failingWriter) WriteHeader(statusCode int) {}
 
 // Mock services for testing
 type mockHealthService struct {
-	err error
+	err      error
+	readyErr error
 }
 
 func (m *mockHealthService) Check(ctx context.Context) error {
 	return m.err
+}
+
+func (m *mockHealthService) Ready(ctx context.Context) error {
+	return m.readyErr
 }
 
 func TestNewServer(t *testing.T) {
@@ -148,6 +162,111 @@ func TestServer_HandleHealth(t *testing.T) {
 
 			if rr.Code != tt.wantStatus {
 				t.Errorf("expected status %d, got %d", tt.wantStatus, rr.Code)
+			}
+		})
+	}
+}
+
+func TestServer_HandleReady(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+
+	tests := []struct {
+		name       string
+		readyErr   error
+		wantStatus int
+		wantBody   string
+	}{
+		{
+			name:       "ready",
+			readyErr:   nil,
+			wantStatus: http.StatusOK,
+			wantBody:   `{"status":"ready"}`,
+		},
+		{
+			name:       "not ready",
+			readyErr:   errors.New("database down"),
+			wantStatus: http.StatusServiceUnavailable,
+			wantBody:   `{"error":"internal server error"}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := Config{
+				Logger: logger,
+				Health: &mockHealthService{readyErr: tt.readyErr},
+			}
+			srv := NewServer(cfg)
+
+			req := httptest.NewRequest("GET", "/api/ready", nil)
+			rr := httptest.NewRecorder()
+
+			srv.ServeHTTP(rr, req)
+
+			if rr.Code != tt.wantStatus {
+				t.Errorf("expected status %d, got %d", tt.wantStatus, rr.Code)
+			}
+
+			if !strings.Contains(rr.Body.String(), tt.wantBody) {
+				t.Errorf("expected body to contain %q, got %q", tt.wantBody, rr.Body.String())
+			}
+		})
+	}
+}
+
+func TestServer_APIVersioning(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+
+	tests := []struct {
+		name       string
+		path       string
+		wantStatus int
+	}{
+		{
+			name:       "v1 health endpoint",
+			path:       "/api/v1/health",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "v1 ready endpoint",
+			path:       "/api/v1/ready",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "unversioned health endpoint (backward compatibility)",
+			path:       "/api/health",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "unversioned ready endpoint (backward compatibility)",
+			path:       "/api/ready",
+			wantStatus: http.StatusOK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := Config{
+				Logger: logger,
+				Health: &mockHealthService{},
+			}
+			srv := NewServer(cfg)
+
+			req := httptest.NewRequest("GET", tt.path, nil)
+			rr := httptest.NewRecorder()
+
+			srv.ServeHTTP(rr, req)
+
+			if rr.Code != tt.wantStatus {
+				t.Errorf("expected status %d, got %d", tt.wantStatus, rr.Code)
+			}
+
+			// Verify response body format
+			if rr.Code == http.StatusOK {
+				body := rr.Body.String()
+				if !strings.Contains(body, "status") {
+					t.Errorf("expected response to contain 'status', got %q", body)
+				}
 			}
 		})
 	}

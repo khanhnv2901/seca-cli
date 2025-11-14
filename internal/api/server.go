@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/khanhnv2901/seca-cli/internal/api/middleware"
 	"go.uber.org/zap"
 	"golang.org/x/time/rate"
 )
@@ -61,6 +62,7 @@ type TelemetryService interface {
 
 type HealthService interface {
 	Check(ctx context.Context) error
+	Ready(ctx context.Context) error
 }
 
 type JobService interface {
@@ -101,13 +103,26 @@ func NewServer(cfg Config) *Server {
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Apply middleware chain: CORS -> RateLimit -> Logging -> Auth -> Handler
-	handler := s.withLogging(s.withRateLimit(s.withCORS(s.mux)))
+	// Apply middleware chain: RequestID -> CORS -> RateLimit -> Logging -> Auth -> Handler
+	handler := middleware.RequestID(s.withLogging(s.withRateLimit(s.withCORS(s.mux))))
 	handler.ServeHTTP(w, r)
 }
 
 func (s *Server) routes() {
+	// Version 1 API routes (primary)
+	s.mux.Handle("/api/v1/health", s.withAuth(http.HandlerFunc(s.handleHealth)))
+	s.mux.Handle("/api/v1/ready", s.withAuth(http.HandlerFunc(s.handleReady)))
+	s.mux.Handle("/api/v1/engagements", s.withAuth(http.HandlerFunc(s.handleEngagements)))
+	s.mux.Handle("/api/v1/engagements/", s.withAuth(http.HandlerFunc(s.handleEngagementByID)))
+	s.mux.Handle("/api/v1/results/", s.withAuth(http.HandlerFunc(s.handleResults)))
+	s.mux.Handle("/api/v1/telemetry/", s.withAuth(http.HandlerFunc(s.handleTelemetry)))
+	s.mux.Handle("/api/v1/jobs", s.withAuth(http.HandlerFunc(s.handleJobs)))
+	s.mux.Handle("/api/v1/jobs/", s.withAuth(http.HandlerFunc(s.handleJobByID)))
+	s.mux.Handle("/api/v1/jobs-stream", s.withAuth(http.HandlerFunc(s.handleJobStream)))
+
+	// Unversioned routes (backward compatibility - alias to v1)
 	s.mux.Handle("/api/health", s.withAuth(http.HandlerFunc(s.handleHealth)))
+	s.mux.Handle("/api/ready", s.withAuth(http.HandlerFunc(s.handleReady)))
 	s.mux.Handle("/api/engagements", s.withAuth(http.HandlerFunc(s.handleEngagements)))
 	s.mux.Handle("/api/engagements/", s.withAuth(http.HandlerFunc(s.handleEngagementByID)))
 	s.mux.Handle("/api/results/", s.withAuth(http.HandlerFunc(s.handleResults)))
@@ -119,16 +134,30 @@ func (s *Server) routes() {
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		s.methodNotAllowed(w)
+		s.methodNotAllowed(w, r)
 		return
 	}
 	if s.cfg.Health != nil {
 		if err := s.cfg.Health.Check(r.Context()); err != nil {
-			s.writeError(w, http.StatusInternalServerError, err)
+			s.writeError(w, r, http.StatusInternalServerError, err)
 			return
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		s.methodNotAllowed(w, r)
+		return
+	}
+	if s.cfg.Health != nil {
+		if err := s.cfg.Health.Ready(r.Context()); err != nil {
+			s.writeError(w, r, http.StatusServiceUnavailable, err)
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
 }
 
 func (s *Server) handleEngagements(w http.ResponseWriter, r *http.Request) {
@@ -136,7 +165,7 @@ func (s *Server) handleEngagements(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		items, err := s.cfg.Engagements.ListEngagements(r.Context())
 		if err != nil {
-			s.writeError(w, http.StatusInternalServerError, err)
+			s.writeError(w, r, http.StatusInternalServerError, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, items)
@@ -144,33 +173,33 @@ func (s *Server) handleEngagements(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, 1048576) // 1MB limit
 		var req EngagementCreateRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			s.writeError(w, http.StatusBadRequest, err)
+			s.writeError(w, r, http.StatusBadRequest, err)
 			return
 		}
 		created, err := s.cfg.Engagements.CreateEngagement(r.Context(), req)
 		if err != nil {
-			s.writeError(w, http.StatusBadRequest, err)
+			s.writeError(w, r, http.StatusBadRequest, err)
 			return
 		}
 		writeJSON(w, http.StatusCreated, created)
 	default:
-		s.methodNotAllowed(w)
+		s.methodNotAllowed(w, r)
 	}
 }
 
 func (s *Server) handleEngagementByID(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		s.methodNotAllowed(w)
+		s.methodNotAllowed(w, r)
 		return
 	}
 	id := strings.TrimPrefix(r.URL.Path, "/api/engagements/")
 	if id == "" {
-		s.writeError(w, http.StatusNotFound, errors.New("engagement ID required"))
+		s.writeError(w, r, http.StatusNotFound, errors.New("engagement ID required"))
 		return
 	}
 	eng, err := s.cfg.Engagements.GetEngagement(r.Context(), id)
 	if err != nil {
-		s.writeError(w, http.StatusNotFound, err)
+		s.writeError(w, r, http.StatusNotFound, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, eng)
@@ -178,17 +207,17 @@ func (s *Server) handleEngagementByID(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleResults(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		s.methodNotAllowed(w)
+		s.methodNotAllowed(w, r)
 		return
 	}
 	id := strings.TrimPrefix(r.URL.Path, "/api/results/")
 	if id == "" {
-		s.writeError(w, http.StatusNotFound, errors.New("engagement ID required"))
+		s.writeError(w, r, http.StatusNotFound, errors.New("engagement ID required"))
 		return
 	}
 	data, err := s.cfg.Results.GetResults(r.Context(), id)
 	if err != nil {
-		s.writeError(w, http.StatusNotFound, err)
+		s.writeError(w, r, http.StatusNotFound, err)
 		return
 	}
 	// Write raw JSON data (already formatted from file)
@@ -201,12 +230,12 @@ func (s *Server) handleResults(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleTelemetry(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		s.methodNotAllowed(w)
+		s.methodNotAllowed(w, r)
 		return
 	}
 	id := strings.TrimPrefix(r.URL.Path, "/api/telemetry/")
 	if id == "" {
-		s.writeError(w, http.StatusNotFound, errors.New("engagement ID required"))
+		s.writeError(w, r, http.StatusNotFound, errors.New("engagement ID required"))
 		return
 	}
 	limit := s.cfg.TelemetryLimit
@@ -220,7 +249,7 @@ func (s *Server) handleTelemetry(w http.ResponseWriter, r *http.Request) {
 	}
 	records, err := s.cfg.Telemetry.GetTelemetry(r.Context(), id, limit)
 	if err != nil {
-		s.writeError(w, http.StatusNotFound, err)
+		s.writeError(w, r, http.StatusNotFound, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, records)
@@ -228,7 +257,7 @@ func (s *Server) handleTelemetry(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
 	if s.cfg.Jobs == nil {
-		s.writeError(w, http.StatusNotFound, errors.New("job service not available"))
+		s.writeError(w, r, http.StatusNotFound, errors.New("job service not available"))
 		return
 	}
 	switch r.Method {
@@ -241,7 +270,7 @@ func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
 		}
 		jobs, err := s.cfg.Jobs.ListJobs(r.Context(), limit)
 		if err != nil {
-			s.writeError(w, http.StatusInternalServerError, err)
+			s.writeError(w, r, http.StatusInternalServerError, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, jobs)
@@ -249,37 +278,37 @@ func (s *Server) handleJobs(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, 1048576) // 1MB limit
 		var req JobRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			s.writeError(w, http.StatusBadRequest, err)
+			s.writeError(w, r, http.StatusBadRequest, err)
 			return
 		}
 		job, err := s.cfg.Jobs.StartJob(r.Context(), req)
 		if err != nil {
-			s.writeError(w, http.StatusBadRequest, err)
+			s.writeError(w, r, http.StatusBadRequest, err)
 			return
 		}
 		writeJSON(w, http.StatusAccepted, job)
 	default:
-		s.methodNotAllowed(w)
+		s.methodNotAllowed(w, r)
 	}
 }
 
 func (s *Server) handleJobByID(w http.ResponseWriter, r *http.Request) {
 	if s.cfg.Jobs == nil {
-		s.writeError(w, http.StatusNotFound, errors.New("job service not available"))
+		s.writeError(w, r, http.StatusNotFound, errors.New("job service not available"))
 		return
 	}
 	if r.Method != http.MethodGet {
-		s.methodNotAllowed(w)
+		s.methodNotAllowed(w, r)
 		return
 	}
 	id := strings.TrimPrefix(r.URL.Path, "/api/jobs/")
 	if id == "" {
-		s.writeError(w, http.StatusNotFound, errors.New("job ID required"))
+		s.writeError(w, r, http.StatusNotFound, errors.New("job ID required"))
 		return
 	}
 	job, err := s.cfg.Jobs.GetJob(r.Context(), id)
 	if err != nil || job == nil {
-		s.writeError(w, http.StatusNotFound, errors.New("job not found"))
+		s.writeError(w, r, http.StatusNotFound, errors.New("job not found"))
 		return
 	}
 	writeJSON(w, http.StatusOK, job)
@@ -287,12 +316,12 @@ func (s *Server) handleJobByID(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleJobStream(w http.ResponseWriter, r *http.Request) {
 	if s.cfg.Jobs == nil {
-		s.writeError(w, http.StatusNotFound, errors.New("job service not available"))
+		s.writeError(w, r, http.StatusNotFound, errors.New("job service not available"))
 		return
 	}
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		s.writeError(w, http.StatusInternalServerError, errors.New("streaming unsupported"))
+		s.writeError(w, r, http.StatusInternalServerError, errors.New("streaming unsupported"))
 		return
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -362,12 +391,13 @@ func (s *Server) withRateLimit(next http.Handler) http.Handler {
 		// Check if request is allowed
 		if !limiter.Allow() {
 			if s.cfg.Logger != nil {
-				s.cfg.Logger.Warn("rate_limit_exceeded",
+				// Log with request context
+				logger := s.requestLogger(r)
+				logger.Warn("rate_limit_exceeded",
 					zap.String("client_ip", clientIP),
-					zap.String("path", r.URL.Path),
 				)
 			}
-			s.writeError(w, http.StatusTooManyRequests, errors.New("rate limit exceeded"))
+			s.writeError(w, r, http.StatusTooManyRequests, errors.New("rate limit exceeded"))
 			return
 		}
 
@@ -424,10 +454,12 @@ func (s *Server) withLogging(next http.Handler) http.Handler {
 		// Process request
 		next.ServeHTTP(lrw, r)
 
-		// Log request details
+		// Log request details with request ID
 		duration := time.Since(start)
 		if s.cfg.Logger != nil {
+			requestID := middleware.GetRequestID(r.Context())
 			s.cfg.Logger.Info("http_request",
+				zap.String("request_id", requestID),
 				zap.String("method", r.Method),
 				zap.String("path", r.URL.Path),
 				zap.String("remote_addr", r.RemoteAddr),
@@ -447,7 +479,7 @@ func (s *Server) withAuth(next http.Handler) http.Handler {
 		token := r.Header.Get("X-Auth-Token")
 		// Use constant-time comparison to prevent timing attacks
 		if subtle.ConstantTimeCompare([]byte(token), []byte(s.cfg.AuthToken)) != 1 {
-			s.writeError(w, http.StatusUnauthorized, errors.New("unauthorized"))
+			s.writeError(w, r, http.StatusUnauthorized, errors.New("unauthorized"))
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -478,14 +510,16 @@ func writeJSON(w http.ResponseWriter, status int, payload interface{}) {
 	_ = json.NewEncoder(w).Encode(payload)
 }
 
-func (s *Server) writeError(w http.ResponseWriter, status int, err error) {
+func (s *Server) writeError(w http.ResponseWriter, r *http.Request, status int, err error) {
 	// Sanitize error messages to prevent information disclosure
 	msg := err.Error()
 
 	// For 5xx errors, return generic message and log details server-side
 	if status >= 500 {
 		if s.cfg.Logger != nil {
-			s.cfg.Logger.Error("internal_server_error",
+			// Log with request context
+			logger := s.requestLogger(r)
+			logger.Error("internal_server_error",
 				zap.Error(err),
 				zap.Int("status", status),
 			)
@@ -496,8 +530,22 @@ func (s *Server) writeError(w http.ResponseWriter, status int, err error) {
 	writeJSON(w, status, map[string]string{"error": msg})
 }
 
-func (s *Server) methodNotAllowed(w http.ResponseWriter) {
-	s.writeError(w, http.StatusMethodNotAllowed, errors.New("method not allowed"))
+// requestLogger creates a logger with request context (request ID, method, path)
+func (s *Server) requestLogger(r *http.Request) *zap.Logger {
+	if s.cfg.Logger == nil {
+		return zap.NewNop()
+	}
+
+	requestID := middleware.GetRequestID(r.Context())
+	return s.cfg.Logger.With(
+		zap.String("request_id", requestID),
+		zap.String("method", r.Method),
+		zap.String("path", r.URL.Path),
+	)
+}
+
+func (s *Server) methodNotAllowed(w http.ResponseWriter, r *http.Request) {
+	s.writeError(w, r, http.StatusMethodNotAllowed, errors.New("method not allowed"))
 }
 
 func (s *Server) writeStreamChunk(w http.ResponseWriter, data []byte) bool {

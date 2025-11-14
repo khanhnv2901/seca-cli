@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -222,6 +223,34 @@ func (s *healthAPIService) Check(ctx context.Context) error {
 	if s.appCtx.ResultsDir == "" {
 		return fmt.Errorf("results directory not configured")
 	}
+	return nil
+}
+
+func (s *healthAPIService) Ready(ctx context.Context) error {
+	// Check if results directory exists and is accessible
+	if s.appCtx.ResultsDir == "" {
+		return fmt.Errorf("results directory not configured")
+	}
+
+	// Check if results directory is accessible
+	if _, err := os.Stat(s.appCtx.ResultsDir); err != nil {
+		return fmt.Errorf("results directory not accessible: %w", err)
+	}
+
+	// Check if engagements file exists (indicates system is initialized)
+	engagementsPath := filepath.Join(s.appCtx.ResultsDir, "engagements.json")
+	if _, err := os.Stat(engagementsPath); err != nil {
+		// File doesn't exist yet - this is OK for a new installation
+		// We'll return nil to indicate ready, but we could also initialize it here
+		// For now, we'll consider the system ready if the directory exists
+		return nil
+	}
+
+	// Verify engagements file is readable
+	if _, err := os.ReadFile(engagementsPath); err != nil {
+		return fmt.Errorf("engagements file not readable: %w", err)
+	}
+
 	return nil
 }
 

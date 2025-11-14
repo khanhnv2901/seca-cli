@@ -559,7 +559,7 @@ func generatePDFReportBytes(data TemplateData) ([]byte, error) {
 		pdf.CellFormat(0, 5, fmt.Sprintf("Response Time: %.2f ms | Server: %s", r.ResponseTime, r.ServerHeader), "", 1, "", false, 0, "")
 
 		// Security Headers Score
-		if r.SecurityHeaders.MaxScore > 0 {
+		if r.SecurityHeaders != nil && r.SecurityHeaders.MaxScore > 0 {
 			pdf.SetFont("Arial", "B", 9)
 			pdf.CellFormat(0, 5, fmt.Sprintf("Security Headers: %d/%d (Grade: %s)",
 				r.SecurityHeaders.Score, r.SecurityHeaders.MaxScore, r.SecurityHeaders.Grade), "", 1, "", false, 0, "")
@@ -580,7 +580,7 @@ func generatePDFReportBytes(data TemplateData) ([]byte, error) {
 		}
 
 		// TLS/SSL Information
-		if r.TLSCompliance.TLSVersion != "" {
+		if r.TLSCompliance != nil && r.TLSCompliance.TLSVersion != "" {
 			pdf.SetFont("Arial", "B", 9)
 			compliance := "Non-Compliant"
 			if r.TLSCompliance.Compliant {
@@ -590,7 +590,7 @@ func generatePDFReportBytes(data TemplateData) ([]byte, error) {
 				r.TLSCompliance.TLSVersion, r.TLSCompliance.CipherSuite, compliance), "", 1, "", false, 0, "")
 
 			// Certificate info
-			if r.TLSCompliance.CertificateInfo.Subject != "" {
+			if r.TLSCompliance.CertificateInfo != nil && r.TLSCompliance.CertificateInfo.Subject != "" {
 				pdf.SetFont("Arial", "", 8)
 				pdf.CellFormat(0, 4, fmt.Sprintf("  Certificate: %s (Expires: %d days)",
 					r.TLSCompliance.CertificateInfo.Subject,
